@@ -321,6 +321,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
         this._dateLabel = dateLabel;
         this._timeLabel = timeLabel;
+        this._timeTextId = timeLabel.connect('notify::text', () => this._positionClock());
         this._positionClock();
 
         // Reparent hint into lockDialogGroup
@@ -990,6 +991,10 @@ export default class WackLockscreenClockExtension extends Extension {
             if (this._timeAllocId) {
                 this._timeLabel.disconnect(this._timeAllocId);
                 this._timeAllocId = null;
+            }
+            if (this._timeTextId) {
+                this._timeLabel.disconnect(this._timeTextId);
+                this._timeTextId = null;
             }
             this._timeLabel = null;
         }
