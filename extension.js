@@ -5,7 +5,12 @@ import GnomeDesktop from 'gi://GnomeDesktop';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
-import Blur from 'gi://Blur';
+let Blur = null;
+try {
+    Blur = (await import('gi://Blur')).default;
+} catch (_) {
+    // gnome-rounded-blur not installed — falling back to Shell.BlurEffect
+}
 
 import Gettext from 'gettext';
 import { Extension, InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -483,13 +488,22 @@ export default class WackLockscreenClockExtension extends Extension {
      * @returns {Blur.BlurEffect} The configured blur effect.
      */
     _makeCardBlur() {
-        return new Blur.BlurEffect({
-            name: NOTIF_BLUR_NAME,
-            mode: Blur.BlurMode.BACKGROUND,
-            radius: NOTIF_BLUR_RADIUS,
-            brightness: NOTIF_BLUR_BRIGHTNESS,
-            corner_radius: NOTIF_CARD_RADIUS,
-        });
+        if (Blur) {
+            return new Blur.BlurEffect({
+                name: NOTIF_BLUR_NAME,
+                mode: Blur.BlurMode.BACKGROUND,
+                radius: NOTIF_BLUR_RADIUS,
+                brightness: NOTIF_BLUR_BRIGHTNESS,
+                corner_radius: NOTIF_CARD_RADIUS,
+            });
+        } else {
+            // Fallback: use the stock Shell.BlurEffect (no background mode or corner radius)
+            return new Shell.BlurEffect({
+                name: NOTIF_BLUR_NAME,
+                radius: NOTIF_BLUR_RADIUS,
+                brightness: NOTIF_BLUR_BRIGHTNESS,
+            });
+        }
     }
 
     /**
