@@ -147,11 +147,6 @@ const WackClock = GObject.registerClass(
             const raw = this._wallClock.clock.trim();
             let timeText = raw.replace(/\s*(AM|PM)\s*/i, '').trim();
 
-            // In 24h mode GNOME often pads single-digit hours (e.g. "09:19").
-            // Display it without the leading zero ("9:19") to match the lock screen style.
-            if (this._interfaceSettings.get_string('clock-format') === '24h')
-                timeText = timeText.replace(/^0(?=\d[:.\u2236])/, '');
-
             this._time.text = timeText;
         }
 
