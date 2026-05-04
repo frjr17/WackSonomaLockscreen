@@ -44,29 +44,21 @@ const NOTIF_CARD_RADIUS = 12;
 // UI limits
 const MAX_VISIBLE_CARDS = 3; // Maximum number of notification cards to show simultaneously
 
-Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
-
-/**
- * Formats the current date using the system 'date' command for better localization support.
- * If the command fails, it falls back to a standard JavaScript Date string.
- * 
- * @returns {Promise<string>} The formatted date string.
- */
-async function getPrettyDate() {
+function getPrettyDate() {
     try {
-        const proc = new Gio.Subprocess({
-            argv: ['date', '+%A, %B %-d'],
-            flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-        });
-        proc.init(null);
-        const [stdout] = await proc.communicate_utf8_async(null, null);
-        return stdout.trim();
+        const now = GLib.DateTime.new_now_local();
+        const day = now.get_day_of_month();
+        return `${now.format('%A, %B')} ${day}`;
     } catch (e) {
-        // Fallback to JS localization if the system call fails
         const now = new Date();
-        return now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        return now.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+        });
     }
 }
+
 
 /**
  * WackClock handles the custom clock widget for the lock screen.
@@ -150,8 +142,8 @@ const WackClock = GObject.registerClass(
             this._time.text = timeText;
         }
 
-        async _updateDate() {
-            this._dateOutput.text = await getPrettyDate();
+        _updateDate() {
+           this._dateOutput.text = getPrettyDate();
         }
 
         /**
@@ -507,12 +499,12 @@ export default class WackLockscreenClockExtension extends Extension {
      * 
      * @param {Clutter.Actor} actor The notification card actor.
      */
-    _addCardBlur(actor) {
-        if (!actor.get_effect(NOTIF_BLUR_NAME))
-            actor.add_effect(this._makeCardBlur());
-            actor.set_style(`border-radius: ${NOTIF_CARD_RADIUS}px;`);
-    }
-
+_addCardBlur(actor) {
+    if (!actor.get_effect(NOTIF_BLUR_NAME)) 
+        actor.add_effect(this._makeCardBlur());
+        actor.set_style(`border-radius: ${NOTIF_CARD_RADIUS}px;`);
+    
+}
     /**
      * Removes the custom blur effect from a notification actor.
      * 
