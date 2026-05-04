@@ -500,10 +500,10 @@ export default class WackLockscreenClockExtension extends Extension {
      * @param {Clutter.Actor} actor The notification card actor.
      */
 _addCardBlur(actor) {
-    if (!actor.get_effect(NOTIF_BLUR_NAME)) 
+    if (!actor.get_effect(NOTIF_BLUR_NAME)) {
         actor.add_effect(this._makeCardBlur());
         actor.set_style(`border-radius: ${NOTIF_CARD_RADIUS}px;`);
-    
+    }
 }
     /**
      * Removes the custom blur effect from a notification actor.
