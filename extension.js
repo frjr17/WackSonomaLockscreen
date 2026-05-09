@@ -831,6 +831,9 @@ _positionOverflow() {
         this._promptActive = true;
 
         for (const widget of this._dialog._backgroundGroup) {
+            const blurEffect = widget.get_effect('blur');
+            if (!blurEffect) continue;
+
             widget.ease_property('@effects.blur.radius', PROMPT_BLUR_RADIUS, {
                 duration: PROMPT_BLUR_DURATION,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
@@ -852,6 +855,9 @@ _positionOverflow() {
             this._enforceCardLimit(this._notifBox);
 
         for (const widget of this._dialog._backgroundGroup) {
+            const blurEffect = widget.get_effect('blur');
+            if (!blurEffect) continue;
+
             widget.ease_property('@effects.blur.radius', 0, {
                 duration: PROMPT_BLUR_DURATION,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
