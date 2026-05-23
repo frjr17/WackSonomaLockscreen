@@ -159,7 +159,7 @@ const WackClock = GObject.registerClass(
         }
 
         _updateDate() {
-           this._dateOutput.text = getPrettyDate();
+            this._dateOutput.text = getPrettyDate();
         }
 
         /**
@@ -343,9 +343,13 @@ export default class WackLockscreenClockExtension extends Extension {
         this._timeTextId = timeLabel.connect('notify::text', () => this._positionClock());
         this._positionClock();
 
-        // Reparent hint into lockDialogGroup
+        // Create a parent container actor for hint and overflow labels
+        this._hintContainer = new Clutter.Actor();
+        lockDialogGroup.add_child(this._hintContainer);
+
+        // Reparent hint into hints container
         const hint = dialog._clock._hint;
-        lockDialogGroup.add_child(hint);
+        this._hintContainer.add_child(hint);
         this._hint = hint;
         // _hintText caches the real hint string so overflow can inherit it
         this._hintText = hint.text;
@@ -353,14 +357,6 @@ export default class WackLockscreenClockExtension extends Extension {
         this._hintTextSyncId = hint.connect('notify::text', () => {
             if (!this._overflowActive)
                 this._hintText = hint.text;
-        });
-        // hard wall — if idle watch tries to ease hint in while prompt is active,
-        // cancel the transition immediately and zero opacity so no flash occurs
-        this._hintOpacityGuardId = hint.connect('notify::opacity', () => {
-            if (this._promptActive && hint.opacity > 0) {
-                hint.remove_all_transitions();
-                hint.set_opacity(0);
-            }
         });
         this._positionHint();
 
@@ -373,7 +369,7 @@ export default class WackLockscreenClockExtension extends Extension {
             visible: false,
         });
         this._overflowActive = false;
-        lockDialogGroup.add_child(this._overflowLabel);
+        this._hintContainer.add_child(this._overflowLabel);
         this._positionOverflow();
 
 
@@ -410,13 +406,13 @@ export default class WackLockscreenClockExtension extends Extension {
                 // Fire _showPrompt with adjustment stubbed so LLS and other hooks
                 // run without re-triggering the ease transition
                 const origEase = dialog._adjustment.ease.bind(dialog._adjustment);
-                dialog._adjustment.ease = () => {};
+                dialog._adjustment.ease = () => { };
                 dialog._showPrompt();
                 dialog._adjustment.ease = origEase;
             } else if (!this._promptActive && wasActive) {
                 this._onPromptHide();
                 const origEase = dialog._adjustment.ease.bind(dialog._adjustment);
-                dialog._adjustment.ease = () => {};
+                dialog._adjustment.ease = () => { };
                 dialog._showClock();
                 dialog._adjustment.ease = origEase;
             }
@@ -435,36 +431,43 @@ export default class WackLockscreenClockExtension extends Extension {
                     effect.set({ radius: globalBlur, brightness: globalBrightness });
             }
 
-            if (this._lockscreenMode === 'cupertino') {
+            // Notification Cards: Blur OUT (Crossfade)
+            const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
+            if (this._notifBox) {
+                this._notifBox._notificationBox.get_children().forEach(child => {
+                    let effect = child.get_effect(NOTIF_BLUR_NAME);
+                    if (effect) {
+                        effect.set({ radius: cardBlur });
+                        effect.set_enabled(cardBlur > 0.5);
+                    }
+                });
+                this._notifBox._players.values().forEach(msg => {
+                    let effect = msg.get_effect(NOTIF_BLUR_NAME);
+                    if (effect) {
+                        effect.set({ radius: cardBlur });
+                        effect.set_enabled(cardBlur > 0.5);
+                    }
+                });
+            }
+
+            const notifOpacity = Math.round(255 * (1 - progress));
+
+            // Hint/Overflow container opacity
+            if (this._hintContainer) {
+                this._hintContainer.opacity = isCupertino
+                    ? notifOpacity
+                    : (progress > 0 ? 0 : 255);
+            }
+
+            if (isCupertino) {
                 // ── Cupertino mode ──────────────────────────────────────────
                 applyPromptAnimation('fade', this._promptActor, progress);
 
-                const notifOpacity = Math.round(255 * (1 - progress));
-                if (this._notifBox) {
-                    this._notifBox._notificationBox.get_children().forEach(child => {
-                        if (child.visible) child.opacity = notifOpacity;
-                    });
-                    this._notifBox._players.values().forEach(msg => {
-                        if (msg.visible) msg.opacity = notifOpacity;
-                    });
-                }
+                if (this._notifBox)
+                    this._notifBox.opacity = notifOpacity;
 
-                const activeLabel = this._overflowActive ? this._overflowLabel : this._hint;
-                if (progress > 0) {
-                    activeLabel.opacity = notifOpacity;
-                    if (progress >= 1 && this._overflowLabel)
-                        this._overflowLabel.visible = false;
-                } else {
-                    if (this._overflowActive) {
-                        this._overflowLabel.visible = true;
-                        this._overflowLabel.opacity = 255;
-                    }
-                    if (this._notifBox) {
-                        this._notifBox._notificationBox.get_children().forEach(c => (c.opacity = 255));
-                        this._notifBox._players.values().forEach(m => (m.opacity = 255));
-                    }
+                if (progress === 0)
                     this._enforceCardLimit(this._notifBox);
-                }
             } else {
                 // ── WACK mode (default) ─────────────────────────────────────
                 applyClockAnimation(
@@ -476,36 +479,11 @@ export default class WackLockscreenClockExtension extends Extension {
                     this._animationState);
                 applyPromptAnimation(this._promptAnimation, this._promptActor, progress);
 
-                // Notification Cards: Blur OUT (Crossfade)
-                const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
-                if (this._notifBox) {
-                    this._notifBox._notificationBox.get_children().forEach(child => {
-                        let effect = child.get_effect(NOTIF_BLUR_NAME);
-                        if (effect) {
-                            effect.set({ radius: cardBlur });
-                            effect.set_enabled(cardBlur > 0.5);
-                        }
-                    });
-                    this._notifBox._players.values().forEach(msg => {
-                        let effect = msg.get_effect(NOTIF_BLUR_NAME);
-                        if (effect) {
-                            effect.set({ radius: cardBlur });
-                            effect.set_enabled(cardBlur > 0.5);
-                        }
-                    });
-                }
+                if (this._notifBox)
+                    this._notifBox.opacity = 255;
 
-                const activeLabel = this._overflowActive ? this._overflowLabel : this._hint;
-                if (progress > 0) {
-                    activeLabel.opacity = 0;
-                    if (this._overflowLabel) this._overflowLabel.visible = false;
-                } else if (progress === 0) {
-                    if (this._overflowActive) {
-                        this._overflowLabel.visible = true;
-                        this._overflowLabel.opacity = 255;
-                    }
+                if (progress === 0)
                     this._enforceCardLimit(this._notifBox);
-                }
             }
         };
 
@@ -566,6 +544,15 @@ export default class WackLockscreenClockExtension extends Extension {
                 const effect = widget.get_effect('blur');
                 if (effect)
                     effect.set({ radius: targetRadius, brightness: targetBrightness });
+            }
+
+            if (this._notifBox) {
+                this._notifBox.opacity = isCupertino ? Math.round(255 * (1 - progress)) : 255;
+            }
+            if (this._hintContainer) {
+                this._hintContainer.opacity = isCupertino
+                    ? Math.round(255 * (1 - progress))
+                    : (progress > 0 ? 0 : 255);
             }
         };
 
@@ -640,12 +627,12 @@ export default class WackLockscreenClockExtension extends Extension {
      * 
      * @param {Clutter.Actor} actor The notification card actor.
      */
-_addCardBlur(actor) {
-    if (!actor.get_effect(NOTIF_BLUR_NAME)) {
-        actor.add_effect(this._makeCardBlur());
-        actor.set_style(`border-radius: ${NOTIF_CARD_RADIUS}px;`);
+    _addCardBlur(actor) {
+        if (!actor.get_effect(NOTIF_BLUR_NAME)) {
+            actor.add_effect(this._makeCardBlur());
+            actor.set_style(`border-radius: ${NOTIF_CARD_RADIUS}px;`);
+        }
     }
-}
     /**
      * Removes the custom blur effect from a notification actor.
      * 
@@ -857,13 +844,7 @@ _addCardBlur(actor) {
     _updateOverflow(hiddenCount) {
         if (!this._overflowLabel) return;
 
-        // Hide the overflow label if the auth prompt is shown
-        const progress = this._dialog._adjustment.value;
-        if (progress > 0 || this._promptActive) {
-            this._overflowLabel.visible = false;
-            this._overflowLabel.opacity = 0;
-            return;
-        }
+
 
         // Revert to standard hint if no notifications are overflowing
         if (hiddenCount <= 0) {
@@ -893,29 +874,29 @@ _addCardBlur(actor) {
     /**
      * Positions the overflow label relative to the screen and notifications.
      */
-_positionOverflow() {
-    if (!this._overflowLabel) return;
-    const monitor = Main.layoutManager.primaryMonitor;
-    if (!monitor) return;
-    const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const monitorX = monitor.x / scaleFactor;
-    const monitorY = monitor.y / scaleFactor;
-    const monitorWidth = monitor.width / scaleFactor;
-    const monitorHeight = monitor.height / scaleFactor;
+    _positionOverflow() {
+        if (!this._overflowLabel) return;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return;
+        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const monitorX = monitor.x / scaleFactor;
+        const monitorY = monitor.y / scaleFactor;
+        const monitorWidth = monitor.width / scaleFactor;
+        const monitorHeight = monitor.height / scaleFactor;
 
-    const [, natWidth] = this._overflowLabel.get_preferred_width(-1);
-    const [, natHeight] = this._overflowLabel.get_preferred_height(-1);
+        const [, natWidth] = this._overflowLabel.get_preferred_width(-1);
+        const [, natHeight] = this._overflowLabel.get_preferred_height(-1);
 
-    const notifBox = this._dialog?._notificationsBox;
-    const notifHeight = notifBox?.visible ? notifBox.height : 0;
+        const notifBox = this._dialog?._notificationsBox;
+        const notifHeight = notifBox?.visible ? notifBox.height : 0;
 
-    const idealY = monitorY + Math.floor(monitorHeight * HINT_VERTICAL_FRACTION);
-    const notifTop = monitorY + monitorHeight - notifHeight - HINT_NOTIF_MARGIN - natHeight;
-    const y = Math.min(idealY, notifTop);
-    const x = monitorX + Math.floor((monitorWidth - natWidth) / 2);
+        const idealY = monitorY + Math.floor(monitorHeight * HINT_VERTICAL_FRACTION);
+        const notifTop = monitorY + monitorHeight - notifHeight - HINT_NOTIF_MARGIN - natHeight;
+        const y = Math.min(idealY, notifTop);
+        const x = monitorX + Math.floor((monitorWidth - natWidth) / 2);
 
-    this._overflowLabel.set_position(x, y);
-}
+        this._overflowLabel.set_position(x, y);
+    }
 
     /**
      * Reverts all notification-related changes when the extension is disabled.
@@ -923,6 +904,8 @@ _positionOverflow() {
     _teardownNotifBlur() {
         const nb = this._notifBox;
         if (!nb) return;
+
+        nb.opacity = 255;
 
         if (this._actorAddedId) {
             nb._notificationBox.disconnect(this._actorAddedId);
@@ -1038,74 +1021,74 @@ _positionOverflow() {
      * Calculates and sets the position of the custom clock on the primary monitor.
      */
 
-    
-_positionClock() {
-    const monitor = Main.layoutManager.primaryMonitor;
-    if (!monitor) return;
-    const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const monitorX = monitor.x / scaleFactor;
-    const monitorY = monitor.y / scaleFactor;
-    const monitorWidth = monitor.width / scaleFactor;
-    const monitorHeight = monitor.height / scaleFactor;
 
-    const wrapper = this._clockWrapper;
-    const dateLabel = this._dateLabel;
-    const timeLabel = this._timeLabel;
-    if (!wrapper || !dateLabel || !timeLabel) return;
+    _positionClock() {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return;
+        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const monitorX = monitor.x / scaleFactor;
+        const monitorY = monitor.y / scaleFactor;
+        const monitorWidth = monitor.width / scaleFactor;
+        const monitorHeight = monitor.height / scaleFactor;
 
-    const topY = monitorY + Math.floor(monitorHeight * DATETIME_TOP_FRACTION);
+        const wrapper = this._clockWrapper;
+        const dateLabel = this._dateLabel;
+        const timeLabel = this._timeLabel;
+        if (!wrapper || !dateLabel || !timeLabel) return;
 
-    dateLabel.set_position(0, 0);
-    timeLabel.set_position(0, DATE_LABEL_HEIGHT);
+        const topY = monitorY + Math.floor(monitorHeight * DATETIME_TOP_FRACTION);
 
-    wrapper.set_position(monitorX, topY);
-    wrapper.set_width(monitorWidth);
-    wrapper.set_pivot_point(0.5, 0.5);
+        dateLabel.set_position(0, 0);
+        timeLabel.set_position(0, DATE_LABEL_HEIGHT);
 
-    const centerLabel = (label) => {
-        const box = label.get_allocation_box();
-        const width = box.get_width();
-        if (width > 0)
-            label.set_x(Math.floor((monitorWidth - width) / 2));
-    };
+        wrapper.set_position(monitorX, topY);
+        wrapper.set_width(monitorWidth);
+        wrapper.set_pivot_point(0.5, 0.5);
 
-    if (this._dateAllocId) { dateLabel.disconnect(this._dateAllocId); this._dateAllocId = null; }
-    if (this._timeAllocId) { timeLabel.disconnect(this._timeAllocId); this._timeAllocId = null; }
+        const centerLabel = (label) => {
+            const box = label.get_allocation_box();
+            const width = box.get_width();
+            if (width > 0)
+                label.set_x(Math.floor((monitorWidth - width) / 2));
+        };
 
-    this._dateAllocId = dateLabel.connect('notify::allocation', () => centerLabel(dateLabel));
-    this._timeAllocId = timeLabel.connect('notify::allocation', () => centerLabel(timeLabel));
+        if (this._dateAllocId) { dateLabel.disconnect(this._dateAllocId); this._dateAllocId = null; }
+        if (this._timeAllocId) { timeLabel.disconnect(this._timeAllocId); this._timeAllocId = null; }
 
-    centerLabel(dateLabel);
-    centerLabel(timeLabel);
-}
+        this._dateAllocId = dateLabel.connect('notify::allocation', () => centerLabel(dateLabel));
+        this._timeAllocId = timeLabel.connect('notify::allocation', () => centerLabel(timeLabel));
+
+        centerLabel(dateLabel);
+        centerLabel(timeLabel);
+    }
 
     /**
      * Positions the interaction hint relative to the notifications area.
      */
-_positionHint() {
-    if (!this._hint) return;
-    const monitor = Main.layoutManager.primaryMonitor;
-    if (!monitor) return;
-    const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const monitorX = monitor.x / scaleFactor;
-    const monitorY = monitor.y / scaleFactor;
-    const monitorWidth = monitor.width / scaleFactor;
-    const monitorHeight = monitor.height / scaleFactor;
+    _positionHint() {
+        if (!this._hint) return;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return;
+        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const monitorX = monitor.x / scaleFactor;
+        const monitorY = monitor.y / scaleFactor;
+        const monitorWidth = monitor.width / scaleFactor;
+        const monitorHeight = monitor.height / scaleFactor;
 
-    const [, natWidth] = this._hint.get_preferred_width(-1);
-    const [, natHeight] = this._hint.get_preferred_height(-1);
+        const [, natWidth] = this._hint.get_preferred_width(-1);
+        const [, natHeight] = this._hint.get_preferred_height(-1);
 
-    const notifBox = this._dialog?._notificationsBox;
-    const notifHeight = notifBox?.visible ? notifBox.height : 0;
+        const notifBox = this._dialog?._notificationsBox;
+        const notifHeight = notifBox?.visible ? notifBox.height : 0;
 
-    const idealY = monitorY + Math.floor(monitorHeight * HINT_VERTICAL_FRACTION);
-    const notifTop = monitorY + monitorHeight - notifHeight - HINT_NOTIF_MARGIN - natHeight;
-    const y = Math.min(idealY, notifTop);
+        const idealY = monitorY + Math.floor(monitorHeight * HINT_VERTICAL_FRACTION);
+        const notifTop = monitorY + monitorHeight - notifHeight - HINT_NOTIF_MARGIN - natHeight;
+        const y = Math.min(idealY, notifTop);
 
-    const x = monitorX + Math.floor((monitorWidth - natWidth) / 2);
-    this._hint.set_position(x, y);
-    this._hint.set_width(natWidth);
-}
+        const x = monitorX + Math.floor((monitorWidth - natWidth) / 2);
+        this._hint.set_position(x, y);
+        this._hint.set_width(natWidth);
+    }
 
     /**
      * Cleans up all modifications and returns the GNOME Shell lock screen to its original state.
@@ -1165,20 +1148,20 @@ _positionHint() {
                 this._hint.disconnect(this._hintTextSyncId);
                 this._hintTextSyncId = null;
             }
-            if (this._hintOpacityGuardId) {
-                this._hint.disconnect(this._hintOpacityGuardId);
-                this._hintOpacityGuardId = null;
-            }
             this._hint.visible = true;
-            lockDialogGroup?.remove_child(this._hint);
             this._hint = null;
         }
 
         // Remove our custom overflow label
         if (this._overflowLabel) {
-            lockDialogGroup?.remove_child(this._overflowLabel);
-            this._overflowLabel.destroy();
             this._overflowLabel = null;
+        }
+
+        // Clean up the hints container
+        if (this._hintContainer) {
+            lockDialogGroup?.remove_child(this._hintContainer);
+            this._hintContainer.destroy();
+            this._hintContainer = null;
         }
 
         // Remove decoupled date/time labels and their wrapper
@@ -1239,4 +1222,4 @@ _positionHint() {
         this._promptActor = null;
         this._animationState = null;
     }
-}git
+}
