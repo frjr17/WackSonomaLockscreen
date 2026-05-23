@@ -307,6 +307,29 @@ export default class WackLockscreenClockExtension extends Extension {
             this._positionOverflow();
         });
 
+        // Handle background blur animations during transitions between clock and prompt.
+        this._injectionManager.overrideMethod(
+            dialog, '_showPrompt',
+            (original) => {
+                const self = this;
+                return function (...args) {
+                    original.call(this, ...args);
+                    self._onPromptShow();
+                };
+            }
+        );
+
+        this._injectionManager.overrideMethod(
+            dialog, '_showClock',
+            (original) => {
+                const self = this;
+                return function (...args) {
+                    original.call(this, ...args);
+                    self._onPromptHide();
+                };
+            }
+        );
+
         // Seamlessly replace the default shell clock with our custom WackClock instance.
         dialog._stack.remove_child(dialog._clock);
         dialog._clock = new WackClock();
@@ -340,13 +363,10 @@ export default class WackLockscreenClockExtension extends Extension {
             if (!this._overflowActive)
                 this._hintText = hint.text;
         });
-        // hard wall — if idle watch tries to ease hint in while prompt is active,
-        // cancel the transition immediately and zero opacity so no flash occurs
+        // hard wall — if idle watch tries to show hint while prompt is active, kill it
         this._hintOpacityGuardId = hint.connect('notify::opacity', () => {
-            if (this._promptActive && hint.opacity > 0) {
-                hint.remove_all_transitions();
+            if (this._promptActive && hint.opacity > 0)
                 hint.set_opacity(0);
-            }
         });
         this._positionHint();
 
@@ -368,6 +388,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._lastPlayingPlayer = null;
         this._promptActive = false;
         this._setupNotifBlur(dialog._notificationsBox);
+        this._promptActor = dialog._stack;
         this._promptActor = dialog._promptBox ?? dialog._stack;
         this._promptActor?.set_pivot_point(0.5, 0.5);
 
@@ -382,28 +403,6 @@ export default class WackLockscreenClockExtension extends Extension {
         this._origSetTransitionProgress = dialog._setTransitionProgress.bind(dialog);
         dialog._setTransitionProgress = (progress) => {
             this._origSetTransitionProgress(progress);
-
-            // Swipe gestures bypass _showPrompt/_showClock entirely, so derive
-            // _promptActive from progress to keep the hint guard working correctly,
-            // and manually fire _showPrompt/_showClock so other extensions hooking
-            // those methods (e.g. LiveLockscreen) stay in sync on swipe gestures
-            const wasActive = this._promptActive;
-            this._promptActive = progress > 0;
-            if (this._promptActive && !wasActive) {
-                this._onPromptShow();
-                // Fire _showPrompt with adjustment stubbed so LLS and other hooks
-                // run without re-triggering the ease transition
-                const origEase = dialog._adjustment.ease.bind(dialog._adjustment);
-                dialog._adjustment.ease = () => {};
-                dialog._showPrompt();
-                dialog._adjustment.ease = origEase;
-            } else if (!this._promptActive && wasActive) {
-                this._onPromptHide();
-                const origEase = dialog._adjustment.ease.bind(dialog._adjustment);
-                dialog._adjustment.ease = () => {};
-                dialog._showClock();
-                dialog._adjustment.ease = origEase;
-            }
 
             // 1. Clock and prompt: selectable transforms driven by the shell transition.
             applyClockAnimation(

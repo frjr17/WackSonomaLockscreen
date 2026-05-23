@@ -10,6 +10,7 @@
   "session-modes": [
     "unlock-dialog"
   ],
+  "settings-schema": "org.gnome.shell.extensions.wack-lockscreen-clock",
   "url": "https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen",
   "version": 1
 }

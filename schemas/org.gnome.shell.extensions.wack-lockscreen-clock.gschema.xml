@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.wack-lockscreen-clock" path="/org/gnome/shell/extensions/wack-lockscreen-clock/">
+    <key name="clock-animation" type="s">
+      <choices>
+        <choice value="scale-down"/>
+        <choice value="zoom-up"/>
+        <choice value="slide-up"/>
+        <choice value="fade"/>
+      </choices>
+      <default>'scale-down'</default>
+      <summary>Clock animation</summary>
+      <description>Animation applied to the date and time while opening the authentication prompt.</description>
+    </key>
+    <key name="prompt-animation" type="s">
+      <choices>
+        <choice value="shell"/>
+        <choice value="rise"/>
+        <choice value="zoom"/>
+        <choice value="fade"/>
+      </choices>
+      <default>'shell'</default>
+      <summary>Prompt animation</summary>
+      <description>Animation applied to the authentication prompt while it appears.</description>
+    </key>
+  </schema>
+</schemalist>
