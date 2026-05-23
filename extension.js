@@ -425,14 +425,29 @@ export default class WackLockscreenClockExtension extends Extension {
 
                 applyPromptAnimation('fade', this._promptActor, progress);
 
-                // Notif cards: crossfade opacity with prompt (inverse)
+                // Notif cards: crossfade opacity and blur with prompt (inverse)
                 const notifOpacity = Math.round(255 * (1 - progress));
+                const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
                 if (this._notifBox) {
                     this._notifBox._notificationBox.get_children().forEach(child => {
-                        if (child.visible) child.opacity = notifOpacity;
+                        if (child.visible) {
+                            child.opacity = notifOpacity;
+                            const effect = child.get_effect(NOTIF_BLUR_NAME);
+                            if (effect) {
+                                effect.set({ radius: cardBlur });
+                                effect.set_enabled(cardBlur > 0.5);
+                            }
+                        }
                     });
                     this._notifBox._players.values().forEach(msg => {
-                        if (msg.visible) msg.opacity = notifOpacity;
+                        if (msg.visible) {
+                            msg.opacity = notifOpacity;
+                            const effect = msg.get_effect(NOTIF_BLUR_NAME);
+                            if (effect) {
+                                effect.set({ radius: cardBlur });
+                                effect.set_enabled(cardBlur > 0.5);
+                            }
+                        }
                     });
                 }
 
@@ -447,10 +462,24 @@ export default class WackLockscreenClockExtension extends Extension {
                         this._overflowLabel.visible = true;
                         this._overflowLabel.opacity = 255;
                     }
-                    // Restore notif opacity on return to rest
+                    // Restore notif opacity and blur on return to rest
                     if (this._notifBox) {
-                        this._notifBox._notificationBox.get_children().forEach(c => (c.opacity = 255));
-                        this._notifBox._players.values().forEach(m => (m.opacity = 255));
+                        this._notifBox._notificationBox.get_children().forEach(c => {
+                            c.opacity = 255;
+                            const effect = c.get_effect(NOTIF_BLUR_NAME);
+                            if (effect) {
+                                effect.set({ radius: NOTIF_BLUR_RADIUS });
+                                effect.set_enabled(true);
+                            }
+                        });
+                        this._notifBox._players.values().forEach(m => {
+                            m.opacity = 255;
+                            const effect = m.get_effect(NOTIF_BLUR_NAME);
+                            if (effect) {
+                                effect.set({ radius: NOTIF_BLUR_RADIUS });
+                                effect.set_enabled(true);
+                            }
+                        });
                     }
                     this._enforceCardLimit(this._notifBox);
                 }
@@ -752,6 +781,10 @@ _addCardBlur(actor) {
 
         // Listen for new notifications being added
         this._actorAddedId = nb._notificationBox.connect('child-added', (container, actor) => {
+            if (this._lockscreenMode === 'cupertino') {
+                const progress = this._dialog._adjustment.value;
+                actor.opacity = Math.round(255 * (1 - progress));
+            }
             this._idleAdd(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 this._addCardBlur(actor);
 
@@ -835,6 +868,32 @@ _addCardBlur(actor) {
             }
             notifCount++;
         });
+
+        if (this._lockscreenMode === 'cupertino') {
+            const progress = this._dialog._adjustment.value;
+            const notifOpacity = Math.round(255 * (1 - progress));
+            const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
+            children.forEach(child => {
+                if (child) {
+                    child.opacity = notifOpacity;
+                    const effect = child.get_effect(NOTIF_BLUR_NAME);
+                    if (effect) {
+                        effect.set({ radius: cardBlur });
+                        effect.set_enabled(cardBlur > 0.5);
+                    }
+                }
+            });
+            nb._players.values().forEach(msg => {
+                if (msg) {
+                    msg.opacity = notifOpacity;
+                    const effect = msg.get_effect(NOTIF_BLUR_NAME);
+                    if (effect) {
+                        effect.set({ radius: cardBlur });
+                        effect.set_enabled(cardBlur > 0.5);
+                    }
+                }
+            });
+        }
 
         this._updateOverflow(hiddenCount);
     }
