@@ -83,16 +83,51 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
 
         window.add(homePage);
 
-        // -- Animations page -------------------------------------------------
+        // -- Configuration page ----------------------------------------------
         const animPage = new Adw.PreferencesPage({
-            title: 'Animations',
-            icon_name: 'media-playback-start-symbolic',
+            title: 'Configuration',
+            icon_name: 'system-lock-screen-symbolic',
         });
 
+        // -- Mode selector --------------------------------------------------
+        const modeGroup = new Adw.PreferencesGroup({
+            title: 'Lockscreen Mode',
+            description: 'WACK is the classic GNOME-compliant style. Cupertino emulates macOS Sonoma.',
+        });
+
+        const modeRow = new Adw.ActionRow({
+            title: 'Mode',
+        });
+        const modeSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_string('lockscreen-mode') === 'cupertino',
+        });
+        modeSwitch.connect('notify::active', () => {
+            settings.set_string('lockscreen-mode', modeSwitch.active ? 'cupertino' : 'wack');
+            animationGroup.sensitive = !modeSwitch.active;
+        });
+        settings.connect('changed::lockscreen-mode', () => {
+            const isCupertino = settings.get_string('lockscreen-mode') === 'cupertino';
+            modeSwitch.active = isCupertino;
+            animationGroup.sensitive = !isCupertino;
+        });
+
+        const wackLabel = new Gtk.Label({ label: 'WACK', valign: Gtk.Align.CENTER });
+        const cupertinoLabel = new Gtk.Label({ label: 'Cupertino', valign: Gtk.Align.CENTER, css_classes: ['dim-label'] });
+        const modeBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER });
+        modeBox.append(wackLabel);
+        modeBox.append(modeSwitch);
+        modeBox.append(cupertinoLabel);
+        modeRow.add_suffix(modeBox);
+        modeGroup.add(modeRow);
+        animPage.add(modeGroup);
+
+        // -- Animation options (greyed out in Cupertino mode) ---------------
         const animationGroup = new Adw.PreferencesGroup({
             title: 'Animations',
             description: 'Choose how the lock screen clock leaves and how the password prompt enters.',
         });
+        animationGroup.sensitive = settings.get_string('lockscreen-mode') !== 'cupertino';
 
         animationGroup.add(this._buildComboRow(
             settings,
@@ -110,7 +145,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
 
         const resetRow = new Adw.ActionRow({
             title: 'Reset Animations',
-            subtitle: 'Restore the default Scale Down clock and Rise prompt animation',
+            subtitle: 'Restore defaults',
         });
         const resetButton = new Gtk.Button({
             icon_name: 'view-refresh-symbolic',

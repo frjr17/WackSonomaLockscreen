@@ -54,6 +54,8 @@ const NOTIF_BLUR_BRIGHTNESS = 1.0;
 const NOTIF_BLUR_NAME = 'wack-notif-blur';
 const NOTIF_CARD_RADIUS = 12;
 
+// Cupertino mode prompt positioning
+const CUPERTINO_PROMPT_VERTICAL_FRACTION = 0.865; // Prompt center Y as fraction of screen height
 // UI limits
 const MAX_VISIBLE_CARDS = 3; // Maximum number of notification cards to show simultaneously
 
@@ -198,8 +200,9 @@ const WackClock = GObject.registerClass(
  */
 const WackLayout = GObject.registerClass(
     class WackLayout extends Clutter.LayoutManager {
-        _init(stack, notifications, switchUserButton) {
+        _init(extension, stack, notifications, switchUserButton) {
             super._init();
+            this._extension = extension;
             this._stack = stack;
             this._notifications = notifications;
             this._switchUserButton = switchUserButton;
@@ -245,9 +248,16 @@ const WackLayout = GObject.registerClass(
             this._notifications.allocate(actorBox);
 
             // Position the stack (which contains the auth prompt)
-            const stackY = Math.min(
-                Math.floor(height / 3.0),
-                height - stackHeight - maxNotificationsHeight);
+            let stackY;
+            if (this._extension._lockscreenMode === 'cupertino') {
+                // When pivot is 0.5, the visual center stays at the allocation center regardless of scale.
+                stackY = Math.floor(height * CUPERTINO_PROMPT_VERTICAL_FRACTION) - Math.floor(stackHeight / 2);
+            } else {
+                stackY = Math.min(
+                    Math.floor(height / 3.0),
+                    height - stackHeight - maxNotificationsHeight);
+            }
+
             actorBox.x1 = columnX1;
             actorBox.y1 = stackY;
             actorBox.x2 = columnX1 + columnWidth;
@@ -282,6 +292,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._settingsSignals = [];
         this._clockAnimation = DEFAULT_CLOCK_ANIMATION;
         this._promptAnimation = DEFAULT_PROMPT_ANIMATION;
+        this._lockscreenMode = 'wack';
         this._animationState = createAnimationState();
         this._loadSettings();
         const lockDialogGroup = Main.screenShield._lockDialogGroup;
@@ -370,12 +381,14 @@ export default class WackLockscreenClockExtension extends Extension {
         this._setupNotifBlur(dialog._notificationsBox);
         this._promptActor = dialog._promptBox ?? dialog._stack;
         this._promptActor?.set_pivot_point(0.5, 0.5);
+        this._applyPromptModeLayout();
 
         // Monitor changes
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => {
             this._positionClock();
             this._positionHint();
             this._positionOverflow();
+            this._applyPromptModeLayout();
         });
 
         // Patch the transition logic to implement our custom clock scaling and prompt blur transition
@@ -405,59 +418,98 @@ export default class WackLockscreenClockExtension extends Extension {
                 dialog._adjustment.ease = origEase;
             }
 
-            // 1. Clock and prompt: selectable transforms driven by the shell transition.
-            applyClockAnimation(
-                this._clockAnimation,
-                this._clockWrapper,
-                dialog._clock,
-                progress,
-                this._getClockAnimationParams(),
-                this._animationState);
-            applyPromptAnimation(this._promptAnimation, this._promptActor, progress);
+            if (this._lockscreenMode === 'cupertino') {
+                // ── Cupertino mode ──────────────────────────────────────────
+                // Clock stays put — no clock animation at all.
+                // Notifs + overflow crossfade OUT as prompt fades IN.
 
-            // 2. Global Background: Blur IN
-            const globalBlur = PROMPT_BLUR_RADIUS * progress;
-            const globalBrightness = 1.0 - (1.0 - PROMPT_BLUR_BRIGHTNESS) * progress;
+                applyPromptAnimation('fade', this._promptActor, progress);
 
-            for (const widget of dialog._backgroundGroup) {
-                const effect = widget.get_effect('blur');
-                if (effect)
-                    effect.set({ radius: globalBlur, brightness: globalBrightness });
-            }
-
-            // 3. Notification Cards: Blur OUT (Crossfade)
-            const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
-            if (this._notifBox) {
-                // Standard Cards
-                this._notifBox._notificationBox.get_children().forEach(child => {
-                    let effect = child.get_effect(NOTIF_BLUR_NAME);
-                    if (effect) {
-                        effect.set({ radius: cardBlur });
-                        effect.set_enabled(cardBlur > 0.5);
-                    }
-                });
-
-                // Media Cards
-                this._notifBox._players.values().forEach(msg => {
-                    let effect = msg.get_effect(NOTIF_BLUR_NAME);
-                    if (effect) {
-                        effect.set({ radius: cardBlur });
-                        effect.set_enabled(cardBlur > 0.5);
-                    }
-                });
-            }
-
-            // 4. Label Management
-            const activeLabel = this._overflowActive ? this._overflowLabel : this._hint;
-            if (progress > 0) {
-                activeLabel.opacity = 0;
-                if (this._overflowLabel) this._overflowLabel.visible = false;
-            } else if (progress === 0) {
-                if (this._overflowActive) {
-                    this._overflowLabel.visible = true;
-                    this._overflowLabel.opacity = 255;
+                // Notif cards: crossfade opacity with prompt (inverse)
+                const notifOpacity = Math.round(255 * (1 - progress));
+                if (this._notifBox) {
+                    this._notifBox._notificationBox.get_children().forEach(child => {
+                        if (child.visible) child.opacity = notifOpacity;
+                    });
+                    this._notifBox._players.values().forEach(msg => {
+                        if (msg.visible) msg.opacity = notifOpacity;
+                    });
                 }
-                this._enforceCardLimit(this._notifBox);
+
+                // Overflow + hint crossfade out with notifs
+                const activeLabel = this._overflowActive ? this._overflowLabel : this._hint;
+                if (progress > 0) {
+                    activeLabel.opacity = notifOpacity;
+                    if (progress >= 1 && this._overflowLabel)
+                        this._overflowLabel.visible = false;
+                } else {
+                    if (this._overflowActive) {
+                        this._overflowLabel.visible = true;
+                        this._overflowLabel.opacity = 255;
+                    }
+                    // Restore notif opacity on return to rest
+                    if (this._notifBox) {
+                        this._notifBox._notificationBox.get_children().forEach(c => (c.opacity = 255));
+                        this._notifBox._players.values().forEach(m => (m.opacity = 255));
+                    }
+                    this._enforceCardLimit(this._notifBox);
+                }
+            } else {
+                // ── WACK mode (default) ─────────────────────────────────────
+                // 1. Clock and prompt: selectable transforms driven by the shell transition.
+                applyClockAnimation(
+                    this._clockAnimation,
+                    this._clockWrapper,
+                    dialog._clock,
+                    progress,
+                    this._getClockAnimationParams(),
+                    this._animationState);
+                applyPromptAnimation(this._promptAnimation, this._promptActor, progress, promptScale);
+
+                // 2. Global Background: Blur IN
+                const globalBlur = PROMPT_BLUR_RADIUS * progress;
+                const globalBrightness = 1.0 - (1.0 - PROMPT_BLUR_BRIGHTNESS) * progress;
+
+                for (const widget of dialog._backgroundGroup) {
+                    const effect = widget.get_effect('blur');
+                    if (effect)
+                        effect.set({ radius: globalBlur, brightness: globalBrightness });
+                }
+
+                // 3. Notification Cards: Blur OUT (Crossfade)
+                const cardBlur = NOTIF_BLUR_RADIUS * (1 - progress);
+                if (this._notifBox) {
+                    // Standard Cards
+                    this._notifBox._notificationBox.get_children().forEach(child => {
+                        let effect = child.get_effect(NOTIF_BLUR_NAME);
+                        if (effect) {
+                            effect.set({ radius: cardBlur });
+                            effect.set_enabled(cardBlur > 0.5);
+                        }
+                    });
+
+                    // Media Cards
+                    this._notifBox._players.values().forEach(msg => {
+                        let effect = msg.get_effect(NOTIF_BLUR_NAME);
+                        if (effect) {
+                            effect.set({ radius: cardBlur });
+                            effect.set_enabled(cardBlur > 0.5);
+                        }
+                    });
+                }
+
+                // 4. Label Management
+                const activeLabel = this._overflowActive ? this._overflowLabel : this._hint;
+                if (progress > 0) {
+                    activeLabel.opacity = 0;
+                    if (this._overflowLabel) this._overflowLabel.visible = false;
+                } else if (progress === 0) {
+                    if (this._overflowActive) {
+                        this._overflowLabel.visible = true;
+                        this._overflowLabel.opacity = 255;
+                    }
+                    this._enforceCardLimit(this._notifBox);
+                }
             }
         };
 
@@ -466,6 +518,7 @@ export default class WackLockscreenClockExtension extends Extension {
         if (mainBox) {
             this._origLayout = mainBox.layout_manager;
             mainBox.layout_manager = new WackLayout(
+                this,
                 dialog._stack,
                 dialog._notificationsBox,
                 dialog._otherUserButton);
@@ -497,12 +550,22 @@ export default class WackLockscreenClockExtension extends Extension {
                 DEFAULT_PROMPT_ANIMATION,
                 PROMPT_ANIMATIONS);
         };
+        const syncLockscreenMode = () => {
+            try {
+                this._lockscreenMode = this._settings.get_string('lockscreen-mode') ?? 'wack';
+            } catch (e) {
+                this._lockscreenMode = 'wack';
+            }
+            this._applyPromptModeLayout?.();
+        };
 
         syncClockAnimation();
         syncPromptAnimation();
+        syncLockscreenMode();
         this._settingsSignals.push(
             this._settings.connect('changed::clock-animation', syncClockAnimation),
-            this._settings.connect('changed::prompt-animation', syncPromptAnimation));
+            this._settings.connect('changed::prompt-animation', syncPromptAnimation),
+            this._settings.connect('changed::lockscreen-mode', syncLockscreenMode));
     }
 
     _getClockAnimationParams() {
@@ -898,6 +961,9 @@ _positionOverflow() {
     _onPromptShow() {
         this._promptActive = true;
 
+        if (this._lockscreenMode === 'cupertino')
+            return;
+
         for (const widget of this._dialog._backgroundGroup) {
             const blurEffect = widget.get_effect('blur');
             if (!blurEffect) continue;
@@ -922,6 +988,9 @@ _positionOverflow() {
         if (this._notifBox)
             this._enforceCardLimit(this._notifBox);
 
+        if (this._lockscreenMode === 'cupertino')
+            return;
+
         for (const widget of this._dialog._backgroundGroup) {
             const blurEffect = widget.get_effect('blur');
             if (!blurEffect) continue;
@@ -935,6 +1004,26 @@ _positionOverflow() {
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
         }
+    }
+
+    /**
+     * Positions and scales the prompt actor based on the active lockscreen mode.
+     * In Cupertino mode the prompt sits at the bottom third of the screen at a reduced scale.
+     * In WACK mode the prompt is left to WackLayout to allocate.
+     */
+    _applyPromptModeLayout() {
+        if (!this._promptActor) return;
+        const isCupertino = this._lockscreenMode === 'cupertino';
+
+        if (isCupertino) {
+            this._promptActor.add_style_class_name('wack-cupertino-prompt');
+        } else {
+            this._promptActor.remove_style_class_name('wack-cupertino-prompt');
+        }
+        this._promptActor.set({ scale_x: 1, scale_y: 1 });
+
+        // Hide/show the username label — St CSS doesn't support display:none,
+        this._mainBox?.queue_relayout();
     }
 
     /**
@@ -1138,6 +1227,7 @@ _positionHint() {
         this._dateLabel = null;
         this._timeLabel = null;
         this._clockWrapper = null;
+        this._promptActor?.remove_style_class_name('wack-cupertino-prompt');
         this._promptActor = null;
         this._animationState = null;
     }

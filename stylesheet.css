@@ -5,11 +5,13 @@
 .wack-date {
     color: rgba(255, 255, 255, 0.6);
     font-size: 30px;
-    font-weight: 600; /* for Inter, it's better to use 500. safe to use 600 for SF Pro Text */
-    letter-spacing: -2px; /* for Inter, it's better to use -1px. safe to use -2px for SF Pro Text */
+    font-weight: 600;
+    /* for Inter, it's better to use 500. safe to use 600 for SF Pro Text */
+    letter-spacing: -2px;
+    /* for Inter, it's better to use -1px. safe to use -2px for SF Pro Text */
     text-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.02);
     /* font-family: 'Inter'; */
-    
+
 }
 
 .wack-time {
@@ -17,7 +19,8 @@
     font-size: 128px;
     font-weight: 600;
     font-feature-settings: "pnum" 1, "tnum" 0;
-    letter-spacing: -2px;
+    font-family: '.SF Soft Numeric';
+    letter-spacing: 0;
     text-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0);
 }
 
@@ -34,8 +37,8 @@
 .unlock-dialog-notification-source,
 .media-message {
     background-color: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(0, 0, 0, 0.08) !important; 
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.04);    
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.04);
     padding: 8px 12px;
     margin-bottom: 4px;
     text-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.08);
@@ -54,7 +57,39 @@
 
 #panel.unlock-screen .panel-button StIcon,
 #panel.unlock-screen .panel-button .system-status-icon {
-      icon-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.08);
-      text-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.08);
+    icon-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.08);
+    text-shadow: 0 0px 12px 2px rgba(0, 0, 0, 0.08);
 }
 
+
+/* ── Cupertino mode prompt ──────────────────────────────────────────────────
+   Applied via .wack-cupertino-prompt on the prompt actor in Cupertino mode.
+   Reduces avatar, username, and password field to match macOS Sonoma's
+   compact lock screen prompt aesthetic — no CSS scale transform needed.     */
+
+.wack-cupertino-prompt .user-widget.vertical .user-icon {
+    icon-size: 90px;
+}
+
+.wack-cupertino-prompt .user-widget.vertical .user-icon StIcon {
+    padding: 14px;
+}
+
+.wack-cupertino-prompt .user-widget.vertical {
+    spacing: 12px;
+}
+
+.wack-cupertino-prompt .user-widget-label {
+    font-size: 0px !important;
+}
+
+.wack-cupertino-prompt .login-dialog-prompt-layout {
+    width: 18em;
+    spacing: 12px;
+}
+
+.wack-cupertino-prompt .login-dialog-prompt-entry {
+    font-size: 10pt;
+    padding: 6px 8px;
+    border-radius: 9999px;
+}
