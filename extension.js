@@ -95,19 +95,52 @@ const WackCupertinoRestPrompt = GObject.registerClass(
             });
             this.add_child(this._userWell);
 
-            // Inline hint label — mirrors the regular unlock hint but is
-            // anchored to the user widget stack instead of floating separately.
-            // Only visible in rest state (no notif cards); fades out on prompt.
-            this._hintLabel = new St.Label({
+            // Inline hint box — anchored to the user widget stack.
+            // Contains notification count/icon (if always-show-user hides them) and the unlock hint.
+            this._hintBox = new St.BoxLayout({
                 style_class: 'wack-cupertino-hint',
                 x_align: Clutter.ActorAlign.CENTER,
                 x_expand: true,
                 opacity: 255,
+            });
+
+            this._notifCountLabel = new St.Label({
                 text: '',
+                y_align: Clutter.ActorAlign.CENTER,
+                visible: false,
+            });
+
+            this._notifIcon = new St.Icon({
+                icon_name: 'preferences-system-notifications-symbolic',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+
+            this._notifIconContainer = new St.Bin({
+                style_class: 'wack-cupertino-hint-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+                visible: false,
+                child: this._notifIcon,
+            });
+
+            this._bulletPoint = new St.Label({
+                text: '  ·  ',
+                y_align: Clutter.ActorAlign.CENTER,
+                visible: false,
+            });
+
+            this._hintLabel = new St.Label({
+                text: '',
+                y_align: Clutter.ActorAlign.CENTER,
             });
             this._hintLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
             this._hintLabel.clutter_text.line_wrap = true;
-            this.add_child(this._hintLabel);
+
+            this._hintBox.add_child(this._notifCountLabel);
+            this._hintBox.add_child(this._notifIconContainer);
+            this._hintBox.add_child(this._bulletPoint);
+            this._hintBox.add_child(this._hintLabel);
+
+            this.add_child(this._hintBox);
 
             this.setUser(user);
         }
@@ -127,6 +160,20 @@ const WackCupertinoRestPrompt = GObject.registerClass(
         setHintText(text) {
             if (this._hintLabel)
                 this._hintLabel.text = text ?? '';
+        }
+
+        setNotifCount(count) {
+            if (!this._notifCountLabel) return;
+            if (count > 0) {
+                this._notifCountLabel.text = `${count} `;
+                this._notifCountLabel.visible = true;
+                this._notifIconContainer.visible = true;
+                this._bulletPoint.visible = true;
+            } else {
+                this._notifCountLabel.visible = false;
+                this._notifIconContainer.visible = false;
+                this._bulletPoint.visible = false;
+            }
         }
     });
 
@@ -675,7 +722,7 @@ export default class WackLockscreenClockExtension extends Extension {
         syncClockAnimation();
         syncPromptAnimation();
         syncLockscreenMode();
-        
+
         const syncCupertinoAlwaysShowUser = () => {
             try {
                 this._cupertinoAlwaysShowUser = this._settings.get_boolean('cupertino-always-show-user');
@@ -851,6 +898,39 @@ export default class WackLockscreenClockExtension extends Extension {
         }
 
         return nativelyHasNotifs;
+    }
+
+    /**
+     * Returns the exact number of notifications natively present, used for
+     * the inline user widget counter when notifications are visually suppressed.
+     */
+    _getNativeNotifCount() {
+        const nb = this._notifBox;
+        if (!nb) return 0;
+
+        let count = 0;
+
+        // Count media players
+        count += [...(nb._players?.values() ?? [])].filter(m => m.visible).length;
+
+        // Count unread notification cards based on GNOME Shell logic
+        const shellVisible = new Set();
+        if (nb._sources) {
+            for (const [source, obj] of nb._sources.entries()) {
+                if (obj.sourceBox && source.unseenCount > 0 && obj.visible) {
+                    shellVisible.add(obj.sourceBox);
+                }
+            }
+        }
+
+        const children = nb._notificationBox?.get_children() ?? [];
+        children.forEach(child => {
+            if (child && !this._isMediaCard(nb, child) && shellVisible.has(child)) {
+                count++;
+            }
+        });
+
+        return count;
     }
 
     /**
@@ -1190,6 +1270,15 @@ export default class WackLockscreenClockExtension extends Extension {
 
         if (this._cupertinoRestPromptContainer) {
             const targetOpacity = hasNotifs ? 0 : 255;
+
+            // Inline notification count updates
+            const count = this._getNativeNotifCount();
+            if (this._cupertinoAlwaysShowUser && count > 0 && !this._cupertinoShowNotifsOverride) {
+                this._cupertinoRestPrompt?.setNotifCount(count);
+            } else {
+                this._cupertinoRestPrompt?.setNotifCount(0);
+            }
+
             if (animate) {
                 this._cupertinoRestPromptContainer.visible = true;
                 this._cupertinoRestPromptContainer.ease({
@@ -1335,7 +1424,7 @@ export default class WackLockscreenClockExtension extends Extension {
             authPrompt.updateUser = this._cupertinoOrigUpdateUser;
             this._cupertinoOrigUpdateUser = null;
         }
-        
+
         // Restore native avatar
         const promptUserWidget = authPrompt?._userWell?.get_child();
         if (promptUserWidget?._avatar)

@@ -92,32 +92,52 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         // -- Mode selector --------------------------------------------------
         const modeGroup = new Adw.PreferencesGroup({
             title: 'Lockscreen Mode',
-            description: 'WACK is the classic GNOME-compliant style. Cupertino emulates macOS Sonoma.',
+            description: 'WACK is the classic GNOME-compliant style. Cupertino tries to recreate the macOS Sonoma layout.',
         });
 
         const modeRow = new Adw.ActionRow({
             title: 'Mode',
         });
-        const modeSwitch = new Gtk.Switch({
+
+        const wackButton = new Gtk.ToggleButton({
+            label: 'WACK',
             valign: Gtk.Align.CENTER,
-            active: settings.get_string('lockscreen-mode') === 'cupertino',
         });
-        modeSwitch.connect('notify::active', () => {
-            settings.set_string('lockscreen-mode', modeSwitch.active ? 'cupertino' : 'wack');
-            animationGroup.sensitive = !modeSwitch.active;
+        const cupertinoButton = new Gtk.ToggleButton({
+            label: 'Cupertino',
+            valign: Gtk.Align.CENTER,
         });
-        settings.connect('changed::lockscreen-mode', () => {
-            const isCupertino = settings.get_string('lockscreen-mode') === 'cupertino';
-            modeSwitch.active = isCupertino;
-            animationGroup.sensitive = !isCupertino;
+        cupertinoButton.set_group(wackButton);
+
+        const isCupertino = settings.get_string('lockscreen-mode') === 'cupertino';
+        if (isCupertino) {
+            cupertinoButton.active = true;
+        } else {
+            wackButton.active = true;
+        }
+
+        cupertinoButton.connect('notify::active', () => {
+            if (cupertinoButton.active) {
+                settings.set_string('lockscreen-mode', 'cupertino');
+                animationGroup.sensitive = false;
+            } else {
+                settings.set_string('lockscreen-mode', 'wack');
+                animationGroup.sensitive = true;
+            }
         });
 
-        const wackLabel = new Gtk.Label({ label: 'WACK', valign: Gtk.Align.CENTER });
-        const cupertinoLabel = new Gtk.Label({ label: 'Cupertino', valign: Gtk.Align.CENTER, css_classes: ['dim-label'] });
-        const modeBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER });
-        modeBox.append(wackLabel);
-        modeBox.append(modeSwitch);
-        modeBox.append(cupertinoLabel);
+        settings.connect('changed::lockscreen-mode', () => {
+            const isCup = settings.get_string('lockscreen-mode') === 'cupertino';
+            if (cupertinoButton.active !== isCup) {
+                cupertinoButton.active = isCup;
+            }
+            animationGroup.sensitive = !isCup;
+        });
+
+        const modeBox = new Gtk.Box({ valign: Gtk.Align.CENTER });
+        modeBox.add_css_class('linked');
+        modeBox.append(wackButton);
+        modeBox.append(cupertinoButton);
         modeRow.add_suffix(modeBox);
         modeGroup.add(modeRow);
 
@@ -140,8 +160,8 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         alwaysShowUserRow.activatable_widget = alwaysShowUserSwitch;
         alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
 
-        modeSwitch.connect('notify::active', () => {
-            alwaysShowUserRow.sensitive = modeSwitch.active;
+        cupertinoButton.connect('notify::active', () => {
+            alwaysShowUserRow.sensitive = cupertinoButton.active;
         });
         settings.connect('changed::lockscreen-mode', () => {
             alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';

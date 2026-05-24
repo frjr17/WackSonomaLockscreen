@@ -133,19 +133,13 @@
     padding-top: 0;
 }
 
-/* Unified caps-lock + auth-failure status label in prompt state */
-.wack-cupertino-status {
+.wack-cupertino-hint-icon StIcon {
+    icon-size: 18px;
     color: rgba(255, 255, 255, 0.625);
-    font-size: 16px;
-    font-weight: 700;
-    text-align: center;
-    text-shadow: 0 0px 8px 1px rgba(0, 0, 0, 0.2);
-    padding-top: 0px;
 }
 
 /* The standalone persistent avatar container */
 .wack-cupertino-persistent-avatar {
-    /* Example: tweak margin-top to align vertically with the prompt text */
     /* margin-top: 10px; */
 }
 
