@@ -19,7 +19,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             orientation: Gtk.Orientation.VERTICAL,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
-            spacing: 12,
+            spacing: 8,
             margin_top: 32,
             margin_bottom: 32,
             margin_start: 24,
@@ -49,6 +49,15 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             max_width_chars: 60,
         });
         homeBox.append(descriptionLabel);
+
+        const versionButton = new Gtk.Button({
+            label: 'v1.0.0',
+            css_classes: ['app-version', 'text-button', 'pill'],
+            halign: Gtk.Align.CENTER,
+            margin_top: 24,
+        });
+        homeBox.append(versionButton);
+
 
         homeGroup.add(homeBox);
         homePage.add(homeGroup);
