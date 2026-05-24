@@ -61,6 +61,33 @@ const CUPERTINO_PROMPT_VERTICAL_FRACTION = 0.86; // Prompt center Y as fraction 
 // UI limits
 const MAX_VISIBLE_CARDS = 3; // Maximum number of notification cards to show simultaneously
 
+// Localization for "More" text in overflow label
+const MORE_LOCALIZATION = {
+    'es': 'más',
+    'fr': 'plus',
+    'de': 'mehr',
+    'it': 'altro',
+    'pt': 'mais',
+    'ru': 'ещё',
+    'zh': '更多',
+    'ja': 'さらに',
+    'ko': '더 보기',
+    'ar': 'المزيد',
+    'hi': 'अधिक',
+    'tr': 'daha fazla',
+    'nl': 'meer',
+    'pl': 'więcej',
+    'sv': 'mer',
+    'da': 'mere',
+    'no': 'mer',
+    'fi': 'lisää',
+    'el': 'περισσότερα',
+    'he': 'עוד',
+    'id': 'lagi',
+    'th': 'เพิ่มเติม',
+    'vi': 'thêm',
+};
+
 function getPrettyDate() {
     try {
         const now = GLib.DateTime.new_now_local();
@@ -1104,9 +1131,22 @@ export default class WackLockscreenClockExtension extends Extension {
         this._hint.set_opacity(0);
 
         // Attempt to localize the "More" text
-        let moreText = Gettext.pgettext('calendar', 'More').toLowerCase();
-        if (moreText === 'more') {
-            moreText = shellGettext('More').toLowerCase();
+        const langs = GLib.get_language_names();
+        let moreText = null;
+        
+        for (const langStr of langs) {
+            const langCode = langStr.split('.')[0].split('_')[0];
+            if (MORE_LOCALIZATION[langCode]) {
+                moreText = MORE_LOCALIZATION[langCode];
+                break;
+            }
+        }
+
+        if (!moreText) {
+            moreText = Gettext.pgettext('calendar', 'More').toLowerCase();
+            if (moreText === 'more') {
+                moreText = shellGettext('More').toLowerCase();
+            }
         }
 
         const overflowText = `${hiddenCount}+ ${moreText}`;
