@@ -1,5 +1,14 @@
-# WACK – Sonoma Lockscreen
+<h1 align="center">WACK – Sonoma Lockscreen</h1>
+
+<p align="center">
+  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rinzler69-wastaken/wack-sonoma-lockscreen" alt="License"/></a>
+  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/releases"><img src="https://img.shields.io/github/v/release/rinzler69-wastaken/wack-sonoma-lockscreen" alt="Release"/></a>
+  <img src="https://img.shields.io/badge/GNOME-48--50-77767B?logo=gnome&logoColor=white" alt="GNOME Version"/>
+</p>
+
+<p align="center">
 A simple GNOME Extension that brings macOS Sonoma-inspired lockscreen to your GNOME Desktop.
+</p>
 
 <p align="center">
   <img src="screenshots/screenshot1.png" width="48%" />
@@ -22,6 +31,9 @@ Notification cards feature an adaptive blur (which crossfades with the prompt bl
 
 - **Clean Notification Management** <br>
 Limits the number of visible cards to prevent lockscreen clutter, capping them with a subtle "N+ more" notice. <br><br>
+
+- **NEW: Cupertino Mode** <br>
+Brings a macOS Sonoma-inspired lockscreen layout — clock stays persistent, a compact user widget sits at the bottom when notifications are empty, and the password prompt crossfades in on demand. Notification cards fade out gracefully when the prompt appears. You can make user widget **persistent** regardless of notification presence via `Lockscreen Mode > Always Show User Widget`. Need to see notifications? Hit `Shift + N`. <br><br>
 
 
 ## Best Used With
