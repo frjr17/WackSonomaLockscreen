@@ -1,7 +1,8 @@
 <h1 align="center">WACK – Sonoma Lockscreen</h1>
 
 <p align="center">
-  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rinzler69-wastaken/wack-sonoma-lockscreen" alt="License"/></a>
+  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/stargazers"><img src="https://img.shields.io/github/stars/rinzler69-wastaken/wack-sonoma-lockscreen?style=flat&color=yellow" alt="Stars"/></a>
+  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--2.0-blue" alt="License"/></a>
   <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/releases"><img src="https://img.shields.io/github/v/release/rinzler69-wastaken/wack-sonoma-lockscreen" alt="Release"/></a>
   <img src="https://img.shields.io/badge/GNOME-48--50-77767B?logo=gnome&logoColor=white" alt="GNOME Version"/>
 </p>
