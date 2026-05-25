@@ -536,15 +536,15 @@ export default class WackLockscreenClockExtension extends Extension {
             if (this._lockscreenMode === 'cupertino' && this._cupertinoAlwaysShowUser && !this._promptActive) {
                 const keysym = event.get_key_symbol();
                 const state = event.get_state();
-                const shiftPressed = (state & imports.gi.Clutter.ModifierType.SHIFT_MASK) !== 0;
+                const shiftPressed = (state & Clutter.ModifierType.SHIFT_MASK) !== 0;
 
-                if (shiftPressed && (keysym === imports.gi.Clutter.KEY_N || keysym === imports.gi.Clutter.KEY_n)) {
+                if (shiftPressed && (keysym === Clutter.KEY_N || keysym === Clutter.KEY_n)) {
                     this._cupertinoShowNotifsOverride = !this._cupertinoShowNotifsOverride;
                     this._updateCupertinoRestState(true);
-                    return imports.gi.Clutter.EVENT_STOP;
+                    return Clutter.EVENT_STOP;
                 }
             }
-            return imports.gi.Clutter.EVENT_PROPAGATE;
+            return Clutter.EVENT_PROPAGATE;
         });
 
         this._applyPromptModeLayout();
@@ -914,7 +914,6 @@ export default class WackLockscreenClockExtension extends Extension {
 
         // If the user has globally disabled lockscreen notifications, assume empty
         if (!this._notifSettings) {
-            const Gio = imports.gi.Gio;
             this._notifSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.notifications' });
         }
         if (!this._notifSettings.get_boolean('show-in-lock-screen')) {
