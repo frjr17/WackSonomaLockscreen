@@ -1447,7 +1447,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
         // Hint/Overflow container opacity
         if (this._hintContainer) {
-            const targetHintOpacity = hasNotifs ? 255 : 0;
+            const targetHintOpacity = (!this._promptActive && hasNotifs) ? 255 : 0;
             if (animate) {
                 this._hintContainer.ease({
                     opacity: targetHintOpacity,
