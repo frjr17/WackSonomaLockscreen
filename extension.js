@@ -1666,7 +1666,12 @@ export default class WackLockscreenClockExtension extends Extension {
             if (this._cupertinoRestPrompt && this._cupertinoRestPrompt._hintBox) {
                 this._cupertinoRestPrompt._hintBox.remove_all_transitions();
                 this._cupertinoRestPrompt._hintBox.opacity = 255;
-                this._cupertinoRestPrompt.setHintText(this._cupertinoBaseHintText || '');
+                
+                // Only reset the text instantly if the container is staying visible.
+                // If it's fading out (hasNotifs is true or prompt is active), leave the text as-is to fade out smoothly.
+                if (!this._hasVisibleNotifs() && !this._promptActive) {
+                    this._cupertinoRestPrompt.setHintText(this._cupertinoBaseHintText || '');
+                }
                 // Note: The rest state logic handles setting the notification count visibility
             }
         }
