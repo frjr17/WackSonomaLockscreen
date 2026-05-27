@@ -541,9 +541,13 @@ export default class WackLockscreenClockExtension extends Extension {
                 const shiftPressed = (state & Clutter.ModifierType.SHIFT_MASK) !== 0;
 
                 if (shiftPressed && (keysym === Clutter.KEY_N || keysym === Clutter.KEY_n)) {
-                    this._cupertinoHintIsToggle = false;
-                    this._cupertinoShowNotifsOverride = !this._cupertinoShowNotifsOverride;
-                    this._updateCupertinoRestState(true);
+                    // Only allow toggling to "show notifications" mode if there are actually notifications present.
+                    // If it is already overridden (true), we always allow toggling it back to false.
+                    if (this._getNativeNotifCount() > 0 || this._cupertinoShowNotifsOverride) {
+                        this._cupertinoHintIsToggle = false;
+                        this._cupertinoShowNotifsOverride = !this._cupertinoShowNotifsOverride;
+                        this._updateCupertinoRestState(true);
+                    }
                     return Clutter.EVENT_STOP;
                 }
             }
