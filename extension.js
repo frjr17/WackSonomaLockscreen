@@ -611,21 +611,21 @@ export default class WackLockscreenClockExtension extends Extension {
 
             // Notification Cards: Blur OUT (Crossfade)
             const cardBlur = hasNotifs ? NOTIF_BLUR_RADIUS * (1 - progress) : 0;
-            if (this._notifBox) {
-                this._notifBox._notificationBox.get_children().forEach(child => {
+            if (this._notifBox && this._notifBox._notificationBox) {
+                for (let child = this._notifBox._notificationBox.get_first_child(); child !== null; child = child.get_next_sibling()) {
                     let effect = child.get_effect(NOTIF_BLUR_NAME);
                     if (effect) {
                         effect.set({ radius: cardBlur });
                         effect.set_enabled(cardBlur > 0.5);
                     }
-                });
-                this._notifBox._players.values().forEach(msg => {
+                }
+                for (const msg of this._notifBox._players.values()) {
                     let effect = msg.get_effect(NOTIF_BLUR_NAME);
                     if (effect) {
                         effect.set({ radius: cardBlur });
                         effect.set_enabled(cardBlur > 0.5);
                     }
-                });
+                }
             }
 
             const notifOpacity = hasNotifs ? Math.round(255 * (1 - progress)) : 0;
@@ -958,8 +958,27 @@ export default class WackLockscreenClockExtension extends Extension {
             return false;
         }
 
-        const hasVisibleCard = nb._notificationBox?.get_children().some(c => c.visible) ?? false;
-        const hasVisiblePlayer = [...(nb._players?.values() ?? [])].some(m => m.visible);
+        let hasVisibleCard = false;
+        const notifContainer = nb._notificationBox;
+        if (notifContainer) {
+            for (let child = notifContainer.get_first_child(); child !== null; child = child.get_next_sibling()) {
+                if (child.visible) {
+                    hasVisibleCard = true;
+                    break;
+                }
+            }
+        }
+        
+        let hasVisiblePlayer = false;
+        if (nb._players) {
+            for (const m of nb._players.values()) {
+                if (m.visible) {
+                    hasVisiblePlayer = true;
+                    break;
+                }
+            }
+        }
+        
         const nativelyHasNotifs = hasVisibleCard || hasVisiblePlayer;
 
         // If Always Show User Widget is enabled in Cupertino mode,
@@ -1066,6 +1085,8 @@ export default class WackLockscreenClockExtension extends Extension {
         // Listen for new notifications being added
         this._actorAddedId = nb._notificationBox.connect('child-added', (container, actor) => {
             this._idleAdd(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (!actor.get_parent()) return GLib.SOURCE_REMOVE;
+
                 this._addCardBlur(actor);
 
                 const player = this._getMediaPlayer(nb, actor);
