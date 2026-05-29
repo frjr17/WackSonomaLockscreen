@@ -51,13 +51,13 @@ For the closest Sonoma feel:
 
 Pairs well with:
 
-- **[Live Lock Screen](https://github.com/nick-redwill/LiveLockScreen)** — Play any video as your lock screen background. Pairs seamlessly with Sonoma Lockscreen — the blur and prompt transitions layer on top of the live wallpaper with full compatibility (may need tweaks on blur characteristics on this extension's settings for Cupertino Mode.). May require GStreamer plugins.
+- **[Live Lock Screen](https://github.com/nick-redwill/LiveLockScreen)** — Play any video as your lock screen background. Pairs seamlessly with Sonoma Lockscreen — the blur and prompt transitions layer on top of the live wallpaper with full compatibility (may need tweaks on blur characteristics on this extension's settings, or turning off "Change Blur", for Cupertino Mode.). May require GStreamer plugins.
 
 
 ## Technical Details
 - State-Aware: Uses ```set_enabled``` logic for blur effects (the notif blur-prompt blur crossfade) to keep your GPU happy.
-- Vanilla Compatibility: Built primarily for GNOME 45–50 (IMPORTANT: See Compatibility Below).
-- Cupertino Mode: Achieves the macOS-style layout entirely through actor reparenting and opacity-driven crossfades — no extra processes, no compositing tricks.
+- Vanilla Compatibility: Built primarily for GNOME 45–50 (GNOME ESModule era) (IMPORTANT: See Compatibility Below).
+- Cupertino Mode:Achieves the macOS-style layout through a combination of actor reparenting into the lock dialog stack, a custom WackLayout allocator that pins the prompt to the lower screen, runtime method patching to suppress the native avatar and blur, and opacity-driven crossfades that smoothly swap between the rest widget, floating avatar, notification cards, and auth prompt across all transition states.
 - LiveLockScreen Compatible: Swipe-to-unlock gestures correctly trigger blur transitions when used alongside Live Lock Screen, with no extra configuration needed.
 
 
@@ -85,7 +85,7 @@ make enable
 Manual Tweak: If you want to change the blur strength or clock position, you can find the constants right at the top of ```extension.js.```
 
 ## Compatibility
-Developed and tested on GNOME 50 (Fedora). Reported issues on GNOME 49 + NVIDIA. GNOME 48 support is experimental. More issues are yet to be known since tests are yet to be made for other configurations. Feel free to open an issue if bugs are found, or clone and contribute!
+Developed and tested on GNOME 50 (Fedora). Reported issues on GNOME 49 + NVIDIA (works fine on GNOME 49 without NVIDIA. GNOME 48 support is untested. More issues are yet to be known since tests are yet to be made for other configurations. Feel free to open an issue if bugs are found, or clone and contribute!
 
 ## About the WACK Project
 WACK (WACK Ain't Cupertino, Kid) brings the best design patterns and details from macOS to the GNOME Desktop — dock magnification, traffic-light window controls, lockscreen layout, quick settings layouts, and many more to come — built entirely within what GNOME already gives you.
