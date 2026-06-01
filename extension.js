@@ -137,7 +137,7 @@ const WackCupertinoRestPrompt = GObject.registerClass(
         _init(user) {
             super._init({
                 style_class: 'login-dialog-prompt-layout',
-                orientation: Clutter.Orientation.VERTICAL,
+                vertical: true,
                 x_expand: true,
                 x_align: Clutter.ActorAlign.CENTER,
                 reactive: false,
@@ -224,7 +224,7 @@ const WackClock = GObject.registerClass(
         _init() {
             super._init({
                 style_class: 'unlock-dialog-clock',
-                orientation: Clutter.Orientation.VERTICAL,
+                vertical: true,
                 y_align: Clutter.ActorAlign.CENTER,
             });
 
@@ -1616,7 +1616,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
         this._cupertinoRestPromptContainer = new St.BoxLayout({
             style_class: 'wack-cupertino-rest',
-            orientation: Clutter.Orientation.VERTICAL,
+            vertical: true,
             reactive: false,
         });
 
