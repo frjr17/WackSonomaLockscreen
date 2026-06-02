@@ -51,7 +51,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         homeBox.append(descriptionLabel);
 
         const versionButton = new Gtk.Button({
-            label: 'v1.0.2-beta.1',
+            label: 'v1.0.2',
             css_classes: ['app-version', 'text-button', 'pill'],
             halign: Gtk.Align.CENTER,
             margin_top: 24,
@@ -88,6 +88,62 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         repoRow.add_suffix(openBtn);
 
         resourcesGroup.add(repoRow);
+
+        const supportGroup = new Adw.PreferencesGroup({ 
+            title: 'Enjoying this extension?',
+            description: 'Consider supporting its development!',
+        });
+
+        const kofiRow = new Adw.ActionRow({
+            title: 'Ko-fi',
+            subtitle: `ko-fi.com/${this.metadata.donations.kofi}`,
+        });
+
+        const kofiIcon = new Gtk.Image({
+            icon_name: 'emblem-favorite-symbolic',
+            pixel_size: 32,
+            valign: Gtk.Align.CENTER,
+        });
+        kofiRow.add_prefix(kofiIcon);
+
+        const kofiBtn = new Gtk.Button({
+            icon_name: 'adw-external-link-symbolic',
+            tooltip_text: 'Open Ko-fi',
+            css_classes: ['flat'],
+            valign: Gtk.Align.CENTER,
+        });
+        kofiBtn.connect('clicked', () => {
+            Gtk.show_uri(window, `https://ko-fi.com/${this.metadata.donations.kofi}`, GLib.CURRENT_TIME);
+        });
+        kofiRow.add_suffix(kofiBtn);
+
+        supportGroup.add(kofiRow);
+
+        const saweriaRow = new Adw.ActionRow({
+            title: 'Saweria',
+            subtitle: this.metadata.donations.custom.replace('https://', ''),
+        });
+
+        const saweriaIcon = new Gtk.Image({
+            icon_name: 'emblem-favorite-symbolic',
+            pixel_size: 32,
+            valign: Gtk.Align.CENTER,
+        });
+        saweriaRow.add_prefix(saweriaIcon);
+
+        const saweriaBtn = new Gtk.Button({
+            icon_name: 'adw-external-link-symbolic',
+            tooltip_text: 'Open Saweria',
+            css_classes: ['flat'],
+            valign: Gtk.Align.CENTER,
+        });
+        saweriaBtn.connect('clicked', () => {
+            Gtk.show_uri(window, this.metadata.donations.custom, GLib.CURRENT_TIME);
+        });
+        saweriaRow.add_suffix(saweriaBtn);
+
+        supportGroup.add(saweriaRow);
+        homePage.add(supportGroup);
         homePage.add(resourcesGroup);
 
         window.add(homePage);
