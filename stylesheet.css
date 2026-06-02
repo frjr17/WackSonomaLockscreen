@@ -129,6 +129,12 @@
     opacity: 0 !important;
 }
 
+.wack-cupertino-rest .user-widget.vertical .user-icon StIcon,
+.wack-cupertino-prompt .user-widget.vertical .user-icon StIcon {
+    padding: 10px;
+}
+
+
 .wack-cupertino-rest .user-widget.vertical {
     spacing: 10px;
 }
