@@ -65,6 +65,56 @@
 }
 
 
+/* ── Password Prompts ────────────────────────────────────────────────────
+   macOS-inspired password prompt styles, adjust to taste    */
+
+
+.login-dialog .login-dialog-prompt-entry,
+.unlock-dialog .login-dialog-prompt-entry {
+    border-radius: 999px !important;
+    background-color: rgba(236, 236, 236, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.login-dialog .login-dialog-prompt-entry:hover,
+.unlock-dialog .login-dialog-prompt-entry:hover {
+    background-color: rgba(236, 236, 236, 0.18);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.login-dialog .login-dialog-prompt-entry:focus,
+.unlock-dialog .login-dialog-prompt-entry:focus {
+    box-shadow: none !important;
+    background-color: rgba(236, 236, 236, 0.18);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.login-dialog .login-dialog-prompt-entry:insensitive,
+.unlock-dialog .login-dialog-prompt-entry:insensitive {
+    background-color: rgba(236, 236, 236, 0.12);
+    color: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.login-dialog .login-dialog-prompt-entry StLabel.hint-text,
+.unlock-dialog .login-dialog-prompt-entry StLabel.hint-text {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+
+.unlock-dialog .user-widget.vertical .user-widget-label {
+    font-weight: 600;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.275);
+}
+
+.login-dialog .user-widget.vertical .user-widget-label {
+    font-weight: 600;
+}
+
+
 /* ── Cupertino mode ─────────────────────────────────────────────────────────
    Two states on the same _promptActor:
    .wack-cupertino-rest  — avatar + label visible, entry hidden via JS opacity
