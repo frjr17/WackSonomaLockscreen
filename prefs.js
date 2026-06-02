@@ -97,9 +97,25 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             description: 'Consider supporting its development!',
         });
 
+        let donations = this.metadata.donations;
+        if (!donations && this.dir) {
+            try {
+                const file = this.dir.get_child('metadata.json');
+                const [, contents] = file.load_contents(null);
+                const decoder = new TextDecoder('utf-8');
+                donations = JSON.parse(decoder.decode(contents)).donations;
+            } catch (e) {
+                console.error('Failed to parse metadata.json:', e);
+            }
+        }
+        donations = donations || {
+            kofi: 'mikerinzler69',
+            custom: 'https://saweria.co/rinzler69'
+        };
+
         const kofiRow = new Adw.ActionRow({
             title: 'Ko-fi',
-            subtitle: `ko-fi.com/${this.metadata.donations.kofi}`,
+            subtitle: `ko-fi.com/${donations.kofi}`,
         });
 
         const kofiIcon = new Gtk.Image({
@@ -116,7 +132,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             valign: Gtk.Align.CENTER,
         });
         kofiBtn.connect('clicked', () => {
-            Gtk.show_uri(window, `https://ko-fi.com/${this.metadata.donations.kofi}`, GLib.CURRENT_TIME);
+            Gtk.show_uri(window, `https://ko-fi.com/${donations.kofi}`, GLib.CURRENT_TIME);
         });
         kofiRow.add_suffix(kofiBtn);
 
@@ -124,7 +140,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
 
         const saweriaRow = new Adw.ActionRow({
             title: 'Saweria',
-            subtitle: this.metadata.donations.custom.replace('https://', ''),
+            subtitle: donations.custom.replace('https://', ''),
         });
 
         const saweriaIcon = new Gtk.Image({
@@ -141,7 +157,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             valign: Gtk.Align.CENTER,
         });
         saweriaBtn.connect('clicked', () => {
-            Gtk.show_uri(window, this.metadata.donations.custom, GLib.CURRENT_TIME);
+            Gtk.show_uri(window, donations.custom, GLib.CURRENT_TIME);
         });
         saweriaRow.add_suffix(saweriaBtn);
 
