@@ -6,7 +6,7 @@
     color: rgba(255, 255, 255, 0.6);
     font-size: 30px;
     font-weight: 600;
-    /* font-family: 'SF Pro Display'; */
+    font-family: 'SF Pro Display';
     /* for Inter, it's better to use 500. safe to use 600 for SF Pro Text */
     letter-spacing: 0px;
     /* for Inter, it's better to use -1px. safe to use -2px for SF Pro Text */
@@ -18,7 +18,7 @@
 .wack-time {
     color: rgba(255, 255, 255, 0.6);
     font-size: 128px;
-    /* font-family: '.SF Soft Numeric'; */
+    font-family: '.SF Soft Numeric';
     font-weight: 600;
     font-feature-settings: "pnum" 1, "tnum" 0;
     letter-spacing: 0;
@@ -120,26 +120,21 @@
    .wack-cupertino-rest  — avatar + label visible, entry hidden via JS opacity
    .wack-cupertino-prompt — entry visible, label suppressed                   */
 
-.wack-cupertino-rest .user-widget.vertical .user-icon,
-.wack-cupertino-prompt .user-widget.vertical .user-icon,
-.wack-cupertino-persistent-avatar .user-icon {
+.wack-cupertino-rest .user-widget.vertical .user-icon {
     icon-size: 58px;
+}
+
+.wack-cupertino-prompt .user-widget.vertical .user-icon {
+    icon-size: 58px !important;
     opacity: 0 !important;
 }
 
-
-
-.wack-cupertino-rest .user-widget.vertical .user-icon StIcon,
-.wack-cupertino-prompt .user-widget.vertical .user-icon StIcon {
-    padding: 4px;
-}
-
 .wack-cupertino-rest .user-widget.vertical {
-    spacing: 12px;
+    spacing: 10px;
 }
 
 .wack-cupertino-prompt .user-widget.vertical {
-    spacing: 2px;
+    spacing: 0;
 }
 
 /* Rest state: label at full size */
@@ -180,12 +175,12 @@
 
 /* Tighten vertical spacing inside the rest-prompt widget */
 .wack-cupertino-rest .login-dialog-prompt-layout {
-    spacing: 2px;
+    spacing: 0;
 }
 
 /* Tighten spacing in prompt mode so the caps lock warning sits flush to the entry */
 .wack-cupertino-prompt .login-dialog-prompt-layout {
-    spacing: 4px;
+    spacing: 5px;
 }
 
 /* Inline hint label anchored to the user widget in rest state */
@@ -193,15 +188,14 @@
     color: rgba(255, 255, 255, 0.625);
     font-size: 14px;
     font-weight: 700;
-    text-align: center;
+    min-height: 1.75em;
     padding-top: 0;
     text-align: center !important;
     text-wrap: wrap !important;
 }
 
 /* ── Cupertino: restyle native CapsLockWarning and PAM message ──────────────
-   Match the wack-cupertino-hint aesthetic — same weight, size, color, center.
-   Scoped to .wack-cupertino-no-status so only applies in Cupertino mode.    */
+   Match the wack-cupertino-hint aesthetic — same weight, size, color, center.    */
 
 .unlock-dialog .caps-lock-warning-label {
     color: rgba(255, 255, 255, 0.625) !important;
