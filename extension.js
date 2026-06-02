@@ -1505,9 +1505,7 @@ export default class WackLockscreenClockExtension extends Extension {
                 promptUserWidget._avatar.opacity = 0;
         }
 
-        if (!this._cupertinoAvatarSetup) {
-            authPrompt.connectObject('destroy', () => this._teardownCupertinoAvatarOverride(), this);
-        }
+        authPrompt.connectObject('destroy', () => this._teardownCupertinoAvatarOverride(), this);
     }
 
     _teardownCupertinoAvatarOverride() {
@@ -1518,8 +1516,8 @@ export default class WackLockscreenClockExtension extends Extension {
 
         if (authPrompt && this._cupertinoOrigUpdateUser) {
             authPrompt.updateUser = this._cupertinoOrigUpdateUser;
-            this._cupertinoOrigUpdateUser = null;
         }
+        this._cupertinoOrigUpdateUser = null;
 
         // Restore native avatar
         const promptUserWidget = authPrompt?._userWell?.get_child();
