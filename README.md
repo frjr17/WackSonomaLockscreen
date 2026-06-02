@@ -1,16 +1,13 @@
-<h1 align="center">WACK – Sonoma Lockscreen</h1>
+# GNOME Shell Extension - WACK Sonoma Lockscreen
 
-<p align="center">
-  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/stargazers"><img src="https://img.shields.io/github/stars/rinzler69-wastaken/wack-sonoma-lockscreen?style=flat&color=yellow" alt="Stars"/></a>
-  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"/></a>
-  <a href="https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/releases"><img src="https://img.shields.io/github/v/release/rinzler69-wastaken/wack-sonoma-lockscreen" alt="Release"/></a>
-  <a href="https://extensions.gnome.org/extension/9713/wack-sonoma-lockscreen/"><img src="https://img.shields.io/badge/GNOME%20Extensions-Available-4A86CF?logo=GNOME&logoColor=white" alt="GNOME Extensions"/></a>
-  <img src="https://img.shields.io/badge/GNOME-46--50-77767B?logo=gnome&logoColor=white" alt="GNOME Version"/>
-</p>
+[<img src="https://github.com/aunetx/files_utils/raw/master/get_it_on_gnome_extensions.png" height="100" align="right">](https://extensions.gnome.org/extension/9713/wack-sonoma-lockscreen/)
 
-<p align="center">
-A simple GNOME Extension that brings macOS Sonoma-inspired lockscreen to your GNOME Desktop.
-</p>
+[![Stars](https://img.shields.io/github/stars/rinzler69-wastaken/wack-sonoma-lockscreen?style=flat&color=yellow)](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/stargazers)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/blob/master/LICENSE)
+[![Release](https://img.shields.io/github/v/release/rinzler69-wastaken/wack-sonoma-lockscreen)](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen/releases)
+![GNOME Version](https://img.shields.io/badge/GNOME-46--50-77767B?logo=gnome&logoColor=white)
+
+A simple GNOME extension that brings a macOS Sonoma-inspired lockscreen to your GNOME Desktop.
 
 <p align="center">
   <img src="screenshots/screenshot1.png" width="48%" />
