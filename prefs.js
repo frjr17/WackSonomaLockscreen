@@ -7,6 +7,10 @@ import { CLOCK_ANIMATION_OPTIONS, PROMPT_ANIMATION_OPTIONS } from './anims.js';
 export default class WackLockscreenClockPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        // Collect settings signal IDs so they can all be disconnected when the
+        // prefs window is destroyed, preventing stale closures from keeping
+        // widget objects alive beyond the window lifetime (M5).
+        const settingsSignalIds = [];
 
         // Increase default window size (width, height)
         window.set_default_size(700, 800);
@@ -210,13 +214,13 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             }
         });
 
-        settings.connect('changed::lockscreen-mode', () => {
+        settingsSignalIds.push(settings.connect('changed::lockscreen-mode', () => {
             const isCup = settings.get_string('lockscreen-mode') === 'cupertino';
             if (cupertinoButton.active !== isCup) {
                 cupertinoButton.active = isCup;
             }
             animationGroup.sensitive = !isCup;
-        });
+        }));
 
         const modeBox = new Gtk.Box({ valign: Gtk.Align.CENTER });
         modeBox.add_css_class('linked');
@@ -237,9 +241,9 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         alwaysShowUserSwitch.connect('notify::active', () => {
             settings.set_boolean('cupertino-always-show-user', alwaysShowUserSwitch.active);
         });
-        settings.connect('changed::cupertino-always-show-user', () => {
+        settingsSignalIds.push(settings.connect('changed::cupertino-always-show-user', () => {
             alwaysShowUserSwitch.active = settings.get_boolean('cupertino-always-show-user');
-        });
+        }));
         alwaysShowUserRow.add_suffix(alwaysShowUserSwitch);
         alwaysShowUserRow.activatable_widget = alwaysShowUserSwitch;
         alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
@@ -247,9 +251,9 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         cupertinoButton.connect('notify::active', () => {
             alwaysShowUserRow.sensitive = cupertinoButton.active;
         });
-        settings.connect('changed::lockscreen-mode', () => {
+        settingsSignalIds.push(settings.connect('changed::lockscreen-mode', () => {
             alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
-        });
+        }));
 
         modeGroup.add(alwaysShowUserRow);
 
@@ -296,6 +300,14 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
 
         animPage.add(animationGroup);
         window.add(animPage);
+
+        // Disconnect all settings signals when the window is destroyed so stale
+        // closures don't hold refs to destroyed widget objects.
+        window.connect('destroy', () => {
+            for (const id of settingsSignalIds)
+                settings.disconnect(id);
+            settingsSignalIds.length = 0;
+        });
     }
 
     _buildComboRow(settings, key, title, subtitle, options) {
@@ -321,7 +333,8 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             if (settings.get_string(key) !== value)
                 settings.set_string(key, value);
         });
-        settings.connect(`changed::${key}`, syncFromSettings);
+        const sigId = settings.connect(`changed::${key}`, syncFromSettings);
+        row.connect('destroy', () => settings.disconnect(sigId));
 
         return row;
     }

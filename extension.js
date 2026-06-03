@@ -153,7 +153,6 @@ export default class WackLockscreenClockExtension extends Extension {
         this._hintContainer.add_child(this._overflowLabel);
 
         // Configure individual background blurs for each notification card.
-        this._lastPlayingPlayer = null;
         this._promptActive = false;
         this._notifManager.setupNotifBlur(dialog._notificationsBox);
         this._promptActor = dialog._promptBox ?? dialog._stack;
@@ -486,101 +485,6 @@ export default class WackLockscreenClockExtension extends Extension {
 
 
     /**
-     * Creates a new blur effect for notification cards.
-     */
-
-
-    /**
-     * Attaches a blur effect to a notification actor if it doesn't already have one.
-     * 
-     * @param {Clutter.Actor} actor The notification card actor.
-     */
-
-    /**
-     * Removes the custom blur effect from a notification actor.
-     * 
-     * @param {Clutter.Actor} actor The notification card actor.
-     */
-
-
-    /**
-     * Toggles the enabled state of blur effects across all current notifications.
-     * 
-     * @param {boolean} enabled Whether the blurs should be active.
-     */
-
-
-    /**
-     * Checks if a given actor represents a media player card.
-     * 
-     * @param {object} nb The notifications box.
-     * @param {Clutter.Actor} actor The actor to check.
-     * @returns {boolean} True if it's a media card.
-     */
-
-
-    /**
-     * Retrieves the media player associated with a specific UI actor.
-     * 
-     * @param {object} nb The notifications box.
-     * @param {Clutter.Actor} actor The UI actor.
-     * @returns {object|null} The media player object, or null if not found.
-     */
-
-
-    /**
-     * Returns true only when at least one notification card or media player
-     * is actually visible on the lockscreen. This correctly excludes sources
-     * whose policy has showInLockScreen=false — those actors still exist in
-     * the tree but have visible=false after _enforceCardLimit runs.
-     */
-
-
-    /**
-     * Returns the exact number of notifications natively present, used for
-     * the inline user widget counter when notifications are visually suppressed.
-     */
-
-
-    /**
-     * Ensures only one media player is visible at a time, prioritizing active sessions.
-     * 
-     * @param {object} nb The notifications box.
-     */
-
-
-    /**
-     * Sets up signal handlers to manage blurs and visibility for the notification container.
-     * 
-     * @param {object} nb The notifications box.
-     */
-
-
-    /**
-     * Manages the visibility of notification cards to respect the defined limits.
-     * 
-     * @param {object} nb The notifications box.
-     */
-
-
-    /**
-     * Updates the text and visibility of the notification overflow label.
-     * 
-     * @param {number} hiddenCount The number of hidden notifications.
-     */
-
-
-    /**
-     * Positions the overflow label relative to the screen and notifications.
-     */
-
-
-    /**
-     * Reverts all notification-related changes when the extension is disabled.
-     */
-
-
-    /**
      * Triggered when the authentication prompt begins to show.
      * Eases background blur in — applies to both WACK and cupertino modes.
      */
@@ -854,7 +758,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
         // Sync hint text from seat touch-mode (same logic as the regular hint)
         if (!this._cupertinoSeat) {
-            const backend = Clutter.get_default_backend();
+            const backend = this.get_context?.().get_backend() ?? Clutter.get_default_backend();
             this._cupertinoSeat = backend.get_default_seat();
             this._cupertinoSeat.connectObject(
                 'notify::touch-mode', () => this._syncCupertinoHint(), this);
@@ -1052,6 +956,14 @@ export default class WackLockscreenClockExtension extends Extension {
         // and to implement custom background blur transitions.
         if (!this._dialog) return;
 
+        // Cancel all pending idle callbacks before tearing down state so they
+        // cannot fire against a half-destroyed extension object (H3).
+        if (this._idleSources) {
+            for (const id of this._idleSources)
+                GLib.source_remove(id);
+            this._idleSources.clear();
+        }
+
         // Restore the original background effect update method
         if (this._origUpdateBgEffects) {
             this._dialog._updateBackgroundEffects = this._origUpdateBgEffects;
@@ -1069,6 +981,13 @@ export default class WackLockscreenClockExtension extends Extension {
         }
 
         this._teardownCupertinoAvatarOverride();
+        // Belt-and-suspenders: clear the hint-cycle timer explicitly here so it
+        // cannot survive if a future race skips the remove inside
+        // _destroyCupertinoRestPrompt() (H1).
+        if (this._cupertinoHintCycleId) {
+            GLib.source_remove(this._cupertinoHintCycleId);
+            this._cupertinoHintCycleId = null;
+        }
         this._destroyCupertinoRestPrompt();
 
         resetAnimationActors(this._clockWrapper, this._promptActor);
@@ -1143,7 +1062,13 @@ export default class WackLockscreenClockExtension extends Extension {
 
         // Restore the original layout manager for the main container
         if (this._mainBox && this._origLayout) {
+            const oldLayout = this._mainBox.layout_manager;
             this._mainBox.layout_manager = this._origLayout;
+            // Break the back-reference from WackLayout → Extension so the
+            // extension can be GC'd while Clutter's pending relayout queue may
+            // still hold a ref to the old layout manager (M4).
+            if (oldLayout && oldLayout !== this._origLayout)
+                oldLayout._extension = null;
             this._mainBox.queue_relayout();
         }
 
@@ -1154,7 +1079,6 @@ export default class WackLockscreenClockExtension extends Extension {
         this._origLayout = null;
         this._overflowActive = false;
         this._hintText = null;
-        this._lastPlayingPlayer = null;
         if (this._promptActor && this._origPromptActorYAlign !== undefined) {
             this._promptActor.y_align = this._origPromptActorYAlign;
             this._origPromptActorYAlign = undefined;
