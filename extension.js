@@ -184,6 +184,12 @@ export default class WackLockscreenClockExtension extends Extension {
                     }
                     return Clutter.EVENT_STOP;
                 }
+
+                if (keysym === Clutter.KEY_Escape && this._cupertinoShowNotifsOverride) {
+                    this._cupertinoShowNotifsOverride = false;
+                    this._updateCupertinoRestState(true);
+                    return Clutter.EVENT_STOP;
+                }
             }
             return Clutter.EVENT_PROPAGATE;
         }, this);
@@ -774,6 +780,16 @@ export default class WackLockscreenClockExtension extends Extension {
 
         if (this._dialog?._authPrompt) {
             this._dialog._authPrompt.cancel();
+        }
+    }
+
+    triggerToggleNotifications() {
+        if (this._lockscreenMode === 'cupertino' && this._cupertinoAlwaysShowUser && !this._promptActive) {
+            if (this._notifManager.getNativeNotifCount() > 0 || this._cupertinoShowNotifsOverride) {
+                this._cupertinoHintIsToggle = false;
+                this._cupertinoShowNotifsOverride = !this._cupertinoShowNotifsOverride;
+                this._updateCupertinoRestState(true);
+            }
         }
     }
 
