@@ -315,11 +315,9 @@ export class NotificationManager {
             let maxTime = 0;
             for (const n of activeNotifs) {
                 if (n.datetime) {
-                    try {
-                        const time = n.datetime.to_unix();
-                        if (time > maxTime)
-                            maxTime = time;
-                    } catch (_) {}
+                    const time = n.datetime.to_unix();
+                    if (time > maxTime)
+                        maxTime = time;
                 }
             }
             return maxTime;

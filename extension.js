@@ -395,13 +395,7 @@ export default class WackLockscreenClockExtension extends Extension {
             this._notifSettings = null;
         }
 
-        try {
-            this._settings = this.getSettings();
-        } catch (e) {
-            console.warn(`WACK lockscreen: preferences schema unavailable, using animation defaults: ${e.message}`);
-            this._settings = null;
-            return;
-        }
+        this._settings = this.getSettings();
 
         const syncClockAnimation = () => {
             this._clockAnimation = getAnimationSetting(
@@ -418,11 +412,7 @@ export default class WackLockscreenClockExtension extends Extension {
                 PROMPT_ANIMATIONS);
         };
         const syncLockscreenMode = () => {
-            try {
-                this._lockscreenMode = this._settings.get_string('lockscreen-mode') ?? 'wack';
-            } catch (e) {
-                this._lockscreenMode = 'wack';
-            }
+            this._lockscreenMode = this._settings.get_string('lockscreen-mode') ?? 'wack';
             this._applyPromptModeLayout?.();
             this._dialog?._updateUserSwitchVisibility?.();
 
@@ -458,11 +448,7 @@ export default class WackLockscreenClockExtension extends Extension {
         syncLockscreenMode();
 
         const syncCupertinoAlwaysShowUser = () => {
-            try {
-                this._cupertinoAlwaysShowUser = this._settings.get_boolean('cupertino-always-show-user');
-            } catch (e) {
-                this._cupertinoAlwaysShowUser = false;
-            }
+            this._cupertinoAlwaysShowUser = this._settings.get_boolean('cupertino-always-show-user');
             this._cupertinoShowNotifsOverride = false;
             this._updateCupertinoRestState?.(true);
         };

@@ -2,6 +2,9 @@
 venv
 .venv
 stylesheet.css
+AGENT.md
+CLAUDE.md
+GEMINI.md
 schemas/gschemas.compiled
 locale/
 *.zip

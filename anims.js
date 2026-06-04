@@ -32,13 +32,8 @@ export function getAnimationSetting(settings, key, fallback, allowedValues) {
     if (!settings)
         return fallback;
 
-    try {
-        const value = settings.get_string(key);
-        return allowedValues.has(value) ? value : fallback;
-    } catch (e) {
-        console.warn(`WACK lockscreen: failed to read ${key}: ${e.message}`);
-        return fallback;
-    }
+    const value = settings.get_string(key);
+    return allowedValues.has(value) ? value : fallback;
 }
 
 export function createAnimationState() {
