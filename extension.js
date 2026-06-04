@@ -47,6 +47,11 @@ export default class WackLockscreenClockExtension extends Extension {
         const dialog = Main.screenShield._dialog;
         if (!dialog) return;
 
+        if (Main.panel?.statusArea?.dateMenu?.container) {
+            this._wasDateMenuVisible = Main.panel.statusArea.dateMenu.container.visible;
+            Main.panel.statusArea.dateMenu.container.hide();
+        }
+
         this._dialog = dialog;
         this._originalClock = dialog._clock;
         // InjectionManager is held for potential future method overrides by sub-features.
@@ -1016,6 +1021,12 @@ export default class WackLockscreenClockExtension extends Extension {
         // We modify the unlock dialog to replace the default clock with our custom WackClock
         // and to implement custom background blur transitions.
         if (!this._dialog) return;
+
+        if (Main.panel?.statusArea?.dateMenu?.container) {
+            if (this._wasDateMenuVisible)
+                Main.panel.statusArea.dateMenu.container.show();
+            this._wasDateMenuVisible = null;
+        }
 
         // Cancel all pending idle callbacks before tearing down state so they
         // cannot fire against a half-destroyed extension object (H3).
