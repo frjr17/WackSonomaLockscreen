@@ -43,48 +43,9 @@ import {
 
 export default class WackLockscreenClockExtension extends Extension {
     enable() {
-        this._injectionManager = new InjectionManager();
-        this._idleSources = new Set();
-        this._clockAnimation = DEFAULT_CLOCK_ANIMATION;
-        this._promptAnimation = DEFAULT_PROMPT_ANIMATION;
-        this._lockscreenMode = 'wack';
-        this._cupertinoAlwaysShowUser = false;
-        this._cupertinoShowNotifsOverride = false; // Toggled via Shift+N
-        this._animationState = createAnimationState();
-
-        // Instantiate NotificationManager before _loadSettings() so that
-        // syncLockscreenMode() and other settings callbacks can safely access it.
-        this._notifManager = new NotificationManager(this);
-        this._loadSettings();
-        this._unblankManager = new UnblankManager(this);
-
-        this._setupDialogHook();
-
-        // If the unlock dialog is already active (e.g. if the extension was reloaded/enabled while locked),
-        // apply customizations immediately.
-        if (Main.screenShield._dialog) {
-            this._applyCustomizations(Main.screenShield._dialog);
-        }
-    }
-
-    _setupDialogHook() {
-        this._originalEnsureUnlockDialog = Main.screenShield._ensureUnlockDialog;
-        const self = this;
-        Main.screenShield._ensureUnlockDialog = function (allowCancel) {
-            const ret = self._originalEnsureUnlockDialog.call(this, allowCancel);
-            if (this._dialog && !self._dialog) {
-                self._applyCustomizations(this._dialog);
-            }
-            return ret;
-        };
-    }
-
-    _applyCustomizations(dialog) {
-
-        // Immediately hide the stock GNOME clock to prevent a one-frame flash
-        // of the default lock screen before our UI is fully installed.
-        // (We remove it from the scene entirely a few lines below anyway.)
-        dialog._clock?.hide();
+        const dialog = Main.screenShield._dialog;
+        console.log(`[Sonoma Lockscreen] enable() called, dialog=${!!dialog}`);
+        if (!dialog) return;
 
         if (Main.panel?.statusArea?.dateMenu?.container) {
             this._wasDateMenuVisible = Main.panel.statusArea.dateMenu.container.visible;
@@ -93,6 +54,21 @@ export default class WackLockscreenClockExtension extends Extension {
 
         this._dialog = dialog;
         this._originalClock = dialog._clock;
+        // InjectionManager is held for potential future method overrides by sub-features.
+        // Currently no overrideMethod() calls are active — it is cleared in disable().
+        this._injectionManager = new InjectionManager();
+        this._idleSources = new Set();
+        this._clockAnimation = DEFAULT_CLOCK_ANIMATION;
+        this._promptAnimation = DEFAULT_PROMPT_ANIMATION;
+        this._lockscreenMode = 'wack';
+        this._cupertinoAlwaysShowUser = false;
+        this._cupertinoShowNotifsOverride = false; // Toggled via Shift+N
+        this._animationState = createAnimationState();
+        // Instantiate NotificationManager before _loadSettings() so that
+        // syncLockscreenMode() and other settings callbacks can safely access it.
+        this._notifManager = new NotificationManager(this);
+        this._loadSettings();
+        this._unblankManager = new UnblankManager(this);
         const lockDialogGroup = Main.screenShield._lockDialogGroup;
 
         // Initialize background effects.
@@ -417,6 +393,7 @@ export default class WackLockscreenClockExtension extends Extension {
                 this._notifShowInLockScreen = this._notifSettings.get_boolean('show-in-lock-screen');
             }, this);
         } catch (e) {
+            console.warn(`WACK lockscreen: notification settings unavailable, assuming lockscreen notifications are enabled: ${e.message}`);
             this._notifSettings = null;
         }
 
@@ -798,7 +775,8 @@ export default class WackLockscreenClockExtension extends Extension {
 
         try {
             Gdm.goto_login_session_sync(null);
-        } catch (_) {
+        } catch (e) {
+            console.error(`WACK lockscreen: failed to switch user: ${e.message}`);
         }
 
         const authPrompt = this._dialog?._promptBox?._authPrompt;
@@ -1022,8 +1000,28 @@ export default class WackLockscreenClockExtension extends Extension {
         this._hint.set_width(natWidth);
     }
 
-    _cleanupCustomizations() {
+    /**
+     * Cleans up all modifications and returns the GNOME Shell lock screen to its original state.
+     */
+    disable() {
+        // Guideline EGO-M-008: Documenting use of unlock-dialog
+        // We modify the unlock dialog to replace the default clock with our custom WackClock
+        // and to implement custom background blur transitions.
+        if (!this._dialog) return;
 
+        if (this._unblankManager) {
+            this._unblankManager.destroy();
+            this._unblankManager = null;
+        }
+
+        if (Main.panel?.statusArea?.dateMenu?.container) {
+            if (this._wasDateMenuVisible)
+                Main.panel.statusArea.dateMenu.container.show();
+            this._wasDateMenuVisible = null;
+        }
+
+        // Cancel all pending idle callbacks before tearing down state so they
+        // cannot fire against a half-destroyed extension object (H3).
         if (this._idleSources) {
             for (const id of this._idleSources)
                 GLib.source_remove(id);
@@ -1031,25 +1029,24 @@ export default class WackLockscreenClockExtension extends Extension {
         }
 
         // Restore the original background effect update method
-        if (this._dialog && this._origUpdateBgEffects) {
+        if (this._origUpdateBgEffects) {
             this._dialog._updateBackgroundEffects = this._origUpdateBgEffects;
             this._origUpdateBgEffects = null;
             this._dialog._updateBackgroundEffects();
         }
 
         // Restore the original user switch visibility method
-        if (this._dialog && this._origUpdateUserSwitchVisibility) {
+        if (this._origUpdateUserSwitchVisibility) {
             this._dialog._updateUserSwitchVisibility = this._origUpdateUserSwitchVisibility;
             this._origUpdateUserSwitchVisibility = null;
             this._dialog._updateUserSwitchVisibility();
         }
 
-        if (this._notifManager) {
-            this._notifManager.teardownNotifBlur();
-        }
+        this._notifManager.teardownNotifBlur();
+        this._notifManager = null;
 
         // Restore the original transition progress handler
-        if (this._dialog && this._origSetTransitionProgress) {
+        if (this._origSetTransitionProgress) {
             this._dialog._setTransitionProgress = this._origSetTransitionProgress;
             this._origSetTransitionProgress = null;
         }
@@ -1068,12 +1065,24 @@ export default class WackLockscreenClockExtension extends Extension {
         const mainBox = this._dialog?._promptBox?._authPrompt?._mainBox;
         if (mainBox) mainBox.opacity = 255;
 
+        if (this._settings)
+            this._settings.disconnectObject(this);
+        this._settings = null;
+
+        // Tear down the notification show-in-lock-screen cache
+        if (this._notifSettings)
+            this._notifSettings.disconnectObject(this);
+        this._notifSettings = null;
+        this._notifShowInLockScreen = false;
+
+        // Remove all method injections
+        this._injectionManager?.clear();
+        this._injectionManager = null;
+
         // Disconnect from UI signals
-        if (this._dialog) {
-            this._dialog._notificationsBox?.disconnectObject(this);
-            this._dialog.disconnectObject(this);
-        }
+        this._dialog._notificationsBox?.disconnectObject(this);
         Main.layoutManager.disconnectObject(this);
+        this._dialog.disconnectObject(this);
 
         const lockDialogGroup = Main.screenShield?._lockDialogGroup;
 
@@ -1113,17 +1122,14 @@ export default class WackLockscreenClockExtension extends Extension {
         }
 
         // Destroy our custom clock and restore the original shell clock
-        if (this._dialog && this._dialog._clock) {
+        if (this._dialog._clock) {
             lockDialogGroup?.remove_child(this._dialog._clock);
             this._dialog._clock.destroy();
             this._dialog._clock = null;
         }
 
-        if (this._dialog && this._originalClock) {
-            this._dialog._clock = this._originalClock;
-            this._dialog._stack.add_child(this._originalClock);
-            this._originalClock.show();
-        }
+        this._dialog._clock = this._originalClock;
+        this._dialog._stack.add_child(this._originalClock);
 
         // Restore the original layout manager for the main container
         if (this._mainBox && this._origLayout) {
@@ -1135,15 +1141,6 @@ export default class WackLockscreenClockExtension extends Extension {
             if (oldLayout && oldLayout !== this._origLayout)
                 oldLayout._extension = null;
             this._mainBox.queue_relayout();
-        }
-
-        // Restore panel date menu container visibility
-        if (Main.panel?.statusArea?.dateMenu?.container && this._wasDateMenuVisible !== undefined) {
-            if (this._wasDateMenuVisible)
-                Main.panel.statusArea.dateMenu.container.show();
-            else
-                Main.panel.statusArea.dateMenu.container.hide();
-            this._wasDateMenuVisible = undefined;
         }
 
         // Reset all internal state
@@ -1159,47 +1156,6 @@ export default class WackLockscreenClockExtension extends Extension {
         }
         this._promptActor?.remove_style_class_name('wack-cupertino-prompt');
         this._promptActor = null;
-    }
-
-    /**
-     * Cleans up all modifications and returns the GNOME Shell lock screen to its original state.
-     */
-    disable() {
-        // Guideline EGO-M-008: Documenting use of unlock-dialog
-        // We modify the unlock dialog to replace the default clock with our custom WackClock
-        // and to implement custom background blur transitions.
-
-        // Revert dialog hook
-        if (this._originalEnsureUnlockDialog) {
-            Main.screenShield._ensureUnlockDialog = this._originalEnsureUnlockDialog;
-            this._originalEnsureUnlockDialog = null;
-        }
-
-        // If customizations are active, clean them up
-        this._cleanupCustomizations();
-
-        if (this._unblankManager) {
-            this._unblankManager.destroy();
-            this._unblankManager = null;
-        }
-
-        if (this._settings) {
-            this._settings.disconnectObject(this);
-            this._settings = null;
-        }
-
-        // Tear down the notification show-in-lock-screen cache
-        if (this._notifSettings) {
-            this._notifSettings.disconnectObject(this);
-            this._notifSettings = null;
-        }
-        this._notifShowInLockScreen = false;
-
-        // Remove all method injections
-        this._injectionManager?.clear();
-        this._injectionManager = null;
-
         this._animationState = null;
-        this._notifManager = null;
     }
 }
