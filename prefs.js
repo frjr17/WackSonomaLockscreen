@@ -24,7 +24,6 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         const homeGroup = new Adw.PreferencesGroup();
         const homeBox = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
             spacing: 8,
             margin_top: 32,
@@ -36,6 +35,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         const icon = new Gtk.Image({
             icon_name: 'preferences-desktop-screensaver-symbolic',
             pixel_size: 128,
+            halign: Gtk.Align.CENTER,
         });
         homeBox.append(icon);
 
@@ -44,6 +44,8 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             css_classes: ['title-1'],
             justify: Gtk.Justification.CENTER,
             halign: Gtk.Align.CENTER,
+            wrap: true,
+            hexpand: true,
         });
         homeBox.append(titleLabel);
 
@@ -54,6 +56,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             halign: Gtk.Align.CENTER,
             wrap: true,
             max_width_chars: 60,
+            hexpand: true,
         });
         homeBox.append(descriptionLabel);
 
@@ -69,6 +72,8 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
                 console.error('Failed to parse metadata.json:', e);
             }
         }
+
+        versionName = String(versionName);
 
         const versionLabel = versionName
             ? (versionName.startsWith('v') ? versionName : `v${versionName}`)
@@ -200,50 +205,18 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             description: 'Choose Legacy for the classic, GNOME-compliant layout. Choose Cupertino for a macOS Sonoma-inspired look (Click user-icon to switch users in Cupertino Mode).',
         });
 
-        const modeRow = new Adw.ActionRow({
-            title: 'Mode',
-        });
+        const modeOptions = [
+            ['wack', 'Legacy'],
+            ['cupertino', 'Cupertino']
+        ];
 
-        const wackButton = new Gtk.ToggleButton({
-            label: 'Legacy',
-            valign: Gtk.Align.CENTER,
-        });
-        const cupertinoButton = new Gtk.ToggleButton({
-            label: 'Cupertino',
-            valign: Gtk.Align.CENTER,
-        });
-        cupertinoButton.set_group(wackButton);
-
-        const isCupertino = settings.get_string('lockscreen-mode') === 'cupertino';
-        if (isCupertino) {
-            cupertinoButton.active = true;
-        } else {
-            wackButton.active = true;
-        }
-
-        cupertinoButton.connect('notify::active', () => {
-            if (cupertinoButton.active) {
-                settings.set_string('lockscreen-mode', 'cupertino');
-                animationGroup.sensitive = false;
-            } else {
-                settings.set_string('lockscreen-mode', 'wack');
-                animationGroup.sensitive = true;
-            }
-        });
-
-        settingsSignalIds.push(settings.connect('changed::lockscreen-mode', () => {
-            const isCup = settings.get_string('lockscreen-mode') === 'cupertino';
-            if (cupertinoButton.active !== isCup) {
-                cupertinoButton.active = isCup;
-            }
-            animationGroup.sensitive = !isCup;
-        }));
-
-        const modeBox = new Gtk.Box({ valign: Gtk.Align.CENTER });
-        modeBox.add_css_class('linked');
-        modeBox.append(wackButton);
-        modeBox.append(cupertinoButton);
-        modeRow.add_suffix(modeBox);
+        const modeRow = this._buildComboRow(
+            settings,
+            'lockscreen-mode',
+            'Mode',
+            'Choose between Legacy and Cupertino styles',
+            modeOptions
+        );
         modeGroup.add(modeRow);
 
         // -- Cupertino options ----------------------------------------------
@@ -265,13 +238,6 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         alwaysShowUserRow.activatable_widget = alwaysShowUserSwitch;
         alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
 
-        cupertinoButton.connect('notify::active', () => {
-            alwaysShowUserRow.sensitive = cupertinoButton.active;
-        });
-        settingsSignalIds.push(settings.connect('changed::lockscreen-mode', () => {
-            alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
-        }));
-
         modeGroup.add(alwaysShowUserRow);
 
         animPage.add(modeGroup);
@@ -282,6 +248,12 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             description: 'Choose how the lock screen clock leaves and how the password prompt enters.',
         });
         animationGroup.sensitive = settings.get_string('lockscreen-mode') !== 'cupertino';
+
+        settingsSignalIds.push(settings.connect('changed::lockscreen-mode', () => {
+            const isCup = settings.get_string('lockscreen-mode') === 'cupertino';
+            alwaysShowUserRow.sensitive = isCup;
+            animationGroup.sensitive = !isCup;
+        }));
 
         animationGroup.add(this._buildComboRow(
             settings,
@@ -316,6 +288,93 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         animationGroup.add(resetRow);
 
         animPage.add(animationGroup);
+
+        // -- Screen Timeout options -----------------------------------------
+        const timeoutGroup = new Adw.PreferencesGroup({
+            title: 'Screen Timeout',
+            description: 'Control when the screen turns off or blanks on the lock screen.',
+        });
+
+        const enableUnblankRow = new Adw.ActionRow({
+            title: 'Keep Screen On',
+            subtitle: 'Prevent the screen from blanking or turning off when locked',
+        });
+        const enableUnblankSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('enable-unblank'),
+        });
+        enableUnblankSwitch.connect('notify::active', () => {
+            settings.set_boolean('enable-unblank', enableUnblankSwitch.active);
+        });
+        settingsSignalIds.push(settings.connect('changed::enable-unblank', () => {
+            enableUnblankSwitch.active = settings.get_boolean('enable-unblank');
+        }));
+        enableUnblankRow.add_suffix(enableUnblankSwitch);
+        enableUnblankRow.activatable_widget = enableUnblankSwitch;
+        timeoutGroup.add(enableUnblankRow);
+
+        const unblankOnAcOnlyRow = new Adw.ActionRow({
+            title: 'Only on AC Power',
+            subtitle: 'Only keep the screen on if the system is plugged in',
+        });
+        const unblankOnAcOnlySwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('unblank-on-ac-only'),
+        });
+        unblankOnAcOnlySwitch.connect('notify::active', () => {
+            settings.set_boolean('unblank-on-ac-only', unblankOnAcOnlySwitch.active);
+        });
+        settingsSignalIds.push(settings.connect('changed::unblank-on-ac-only', () => {
+            unblankOnAcOnlySwitch.active = settings.get_boolean('unblank-on-ac-only');
+        }));
+        unblankOnAcOnlyRow.add_suffix(unblankOnAcOnlySwitch);
+        unblankOnAcOnlyRow.activatable_widget = unblankOnAcOnlySwitch;
+        timeoutGroup.add(unblankOnAcOnlyRow);
+
+        const timeoutOptions = [
+            [0, 'Never'],
+            [60, '1 minute'],
+            [300, '5 minutes'],
+            [600, '10 minutes'],
+            [900, '15 minutes'],
+            [1800, '30 minutes'],
+            [3600, '60 minutes'],
+            [7200, '2 hours'],
+        ];
+        const timeoutModel = new Gtk.StringList();
+        for (const [, label] of timeoutOptions) {
+            timeoutModel.append(label);
+        }
+        const timeoutRow = new Adw.ComboRow({
+            title: 'Blank Timeout',
+            subtitle: 'Time to wait before turning off the screen',
+            model: timeoutModel,
+        });
+        const syncTimeoutFromSettings = () => {
+            const current = settings.get_int('unblank-timeout');
+            const selected = Math.max(0, timeoutOptions.findIndex(([value]) => value === current));
+            timeoutRow.selected = selected;
+        };
+        syncTimeoutFromSettings();
+        timeoutRow.connect('notify::selected', () => {
+            const [value] = timeoutOptions[timeoutRow.selected] ?? timeoutOptions[0];
+            if (settings.get_int('unblank-timeout') !== value) {
+                settings.set_int('unblank-timeout', value);
+            }
+        });
+        const sigId = settings.connect('changed::unblank-timeout', syncTimeoutFromSettings);
+        timeoutRow.connect('destroy', () => settings.disconnect(sigId));
+        timeoutGroup.add(timeoutRow);
+
+        const syncSensitivity = () => {
+            const enabled = settings.get_boolean('enable-unblank');
+            unblankOnAcOnlyRow.sensitive = enabled;
+            timeoutRow.sensitive = enabled;
+        };
+        syncSensitivity();
+        settingsSignalIds.push(settings.connect('changed::enable-unblank', syncSensitivity));
+
+        animPage.add(timeoutGroup);
         window.add(animPage);
 
         // Disconnect all settings signals when the window is destroyed so stale

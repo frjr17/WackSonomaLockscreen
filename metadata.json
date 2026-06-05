@@ -10,6 +10,7 @@
     "50"
   ],
   "session-modes": [
+    "user",
     "unlock-dialog"
   ],
   "gettext-domain": "wack-lockscreen-clock@rinzler69-wastaken.github.com",
