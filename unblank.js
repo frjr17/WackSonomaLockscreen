@@ -11,19 +11,21 @@ const DisplayConfigIface = `<node>
     <property name="PowerSaveMode" type="i" access="readwrite"/>
 </interface>
 </node>`;
-const DisplayConfigProxy = Gio.DBusProxy.makeProxyWrapper(DisplayConfigIface);
 
 const UPowerIface = `<node>
 <interface name="org.freedesktop.UPower">
     <property name="OnBattery" type="b" access="read"/>
 </interface>
 </node>`;
-const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(UPowerIface);
 
 export class UnblankManager {
     constructor(extension) {
         this._extension = extension;
         this._settings = extension._settings;
+
+        const DisplayConfigProxy = Gio.DBusProxy.makeProxyWrapper(DisplayConfigIface);
+        const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(UPowerIface);
+
         this._displayProxy = new DisplayConfigProxy(Gio.DBus.session, 'org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig', () => {});
         this._upowerProxy = new UPowerProxy(Gio.DBus.system, 'org.freedesktop.UPower', '/org/freedesktop/UPower', (proxy, error) => {
             if (error) {
