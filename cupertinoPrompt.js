@@ -119,10 +119,11 @@ export const WackCupertinoRestPrompt = GObject.registerClass(
             if (this._currentCount > 0) {
                 this._hintLabel.clutter_text.use_markup = true;
                 this._hintLabel.clutter_text.set_markup(
-                    `${this._currentCount} <span size="smaller">🔔\uFE0E</span>  ·  ${safeText}`);
+                    `${this._currentCount} <span size="8705">🔔\uFE0E</span>  ·  ${safeText}`
+                );
             } else {
-                this._hintLabel.clutter_text.use_markup = false;
-                this._hintLabel.text = this._currentText;
+                this._hintLabel.clutter_text.use_markup = true;
+                this._hintLabel.clutter_text.set_markup(this._currentText);
             }
         }
     });
