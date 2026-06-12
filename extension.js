@@ -2,6 +2,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
+import Gdm from 'gi://Gdm';
 import Gettext from 'gettext';
 import { Extension, InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -763,7 +764,15 @@ export default class WackLockscreenClockExtension extends Extension {
         this._mainBox?.queue_relayout();
     }
 
+    triggerSwitchUser() {
+        if (this._lockscreenMode !== 'cupertino') return;
 
+        try {
+            Gdm.goto_login_session_sync(null);
+        } catch (e) {
+            console.error(`WACK lockscreen: failed to switch user: ${e.message}`);
+        }
+    }
 
     triggerToggleNotifications() {
         if (this._lockscreenMode === 'cupertino' && this._cupertinoAlwaysShowUser && !this._promptActive) {
