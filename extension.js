@@ -25,6 +25,7 @@ import { WackClock } from './wackClock.js';
 import { WackCupertinoRestPrompt } from './cupertinoPrompt.js';
 import { WackLayout } from './layoutManager.js';
 import { NotificationManager } from './notificationManager.js';
+import { GdmManager } from './gdm.js';
 import {
     PROMPT_BLUR_RADIUS,
     PROMPT_BLUR_BRIGHTNESS,
@@ -43,6 +44,11 @@ import {
 
 export default class WackLockscreenClockExtension extends Extension {
     enable() {
+        this._gdmManager = new GdmManager(this);
+        this._gdmManager.enable();
+
+        this._setupWallpaperMonitoring();
+
         const dialog = Main.screenShield._dialog;
         console.log(`[Sonoma Lockscreen] enable() called, dialog=${!!dialog}`);
         if (!dialog) return;
@@ -1378,11 +1384,95 @@ export default class WackLockscreenClockExtension extends Extension {
         return null;
     }
 
+    _setupWallpaperMonitoring() {
+        if (Main.sessionMode.currentMode === 'gdm')
+            return;
+
+        this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+        this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
+
+        const save = () => this._saveWallpaper();
+
+        this._bgSettings.connectObject(
+            'changed::picture-uri', save,
+            'changed::picture-uri-dark', save,
+            'changed::picture-options', save,
+            this
+        );
+        this._interfaceSettings.connectObject(
+            'changed::color-scheme', save,
+            this
+        );
+
+        save();
+    }
+
+    _saveWallpaper() {
+        try {
+            const colorScheme = this._interfaceSettings.get_enum('color-scheme');
+            const style = this._bgSettings.get_enum('picture-options');
+            const uri = this._bgSettings.get_string(
+                colorScheme === 1 // PREFER_DARK
+                    ? 'picture-uri-dark'
+                    : 'picture-uri'
+            );
+
+            let isColor = (style === 0);
+            let targetPath = '/tmp/wack-shared-wallpaper.jpg';
+            let success = false;
+
+            if (uri && uri.startsWith('file://') && !isColor) {
+                const srcPath = uri.slice(7);
+                const srcFile = Gio.File.new_for_path(srcPath);
+                if (srcFile.query_exists(null)) {
+                    const destFile = Gio.File.new_for_path(targetPath);
+                    srcFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null);
+                    destFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+                    success = true;
+                }
+            }
+
+            const metadata = {
+                uri: success ? `file://${targetPath}` : uri,
+                style: style,
+                primary_color: this._bgSettings.get_string('primary-color'),
+                secondary_color: this._bgSettings.get_string('secondary-color'),
+                shading_type: this._bgSettings.get_enum('color-shading-type'),
+                is_color: !success
+            };
+
+            const metaFile = Gio.File.new_for_path('/tmp/wack-shared-wallpaper.json');
+            metaFile.replace_contents(
+                JSON.stringify(metadata),
+                null,
+                false,
+                Gio.FileCreateFlags.REPLACE_DESTINATION,
+                null
+            );
+            metaFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+        } catch (e) {
+            console.log('[WACK/Extension] Failed to save wallpaper: ' + e);
+        }
+    }
 
     /**
      * Cleans up all modifications and returns the GNOME Shell lock screen to its original state.
      */
     disable() {
+        if (this._gdmManager) {
+            this._gdmManager.disable();
+            this._gdmManager = null;
+        }
+
+        if (this._bgSettings) {
+            this._bgSettings.disconnectObject(this);
+            this._bgSettings = null;
+        }
+        if (this._interfaceSettings) {
+            this._interfaceSettings.disconnectObject(this);
+            this._interfaceSettings = null;
+        }
+
         // Guideline EGO-M-008: Documenting use of unlock-dialog
         // We modify the unlock dialog to replace the default clock with our custom WackClock
         // and to implement custom background blur transitions.
