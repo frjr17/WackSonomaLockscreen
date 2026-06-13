@@ -3,6 +3,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Gdm from 'gi://Gdm';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import Gettext from 'gettext';
 import { Extension, InjectionManager } from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -1190,37 +1191,175 @@ export default class WackLockscreenClockExtension extends Extension {
             );
 
             let isColor = (style === 0);
-            let targetPath = `/tmp/wack-shared-wallpaper-${userName}.jpg`;
-            let success = false;
+            let isXml = uri && uri.toLowerCase().endsWith('.xml');
+            let targetPath = `/var/tmp/wack-shared-wallpaper-${userName}.jpg`;
+            
+            // Check if existing wallpaper metadata matches current settings
+            const metaFile = Gio.File.new_for_path(`/var/tmp/wack-shared-wallpaper-${userName}.json`);
+            let metadataMatches = false;
+            let existingMetadata = null;
 
-            if (uri && uri.startsWith('file://') && !isColor) {
-                const srcFile = Gio.File.new_for_uri(uri);
-                if (srcFile.query_exists(null)) {
-                    const destFile = Gio.File.new_for_path(targetPath);
-                    srcFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null);
-                    destFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
-                    success = true;
+            if (metaFile.query_exists(null)) {
+                try {
+                    const [loadSuccess, contents] = metaFile.load_contents(null);
+                    if (loadSuccess) {
+                        existingMetadata = JSON.parse(new TextDecoder().decode(contents));
+                        const currentPrimary = this._bgSettings.get_string('primary-color');
+                        const currentSecondary = this._bgSettings.get_string('secondary-color');
+                        const currentShading = this._bgSettings.get_enum('color-shading-type');
+                        
+                        if (existingMetadata &&
+                            existingMetadata.source_uri === uri &&
+                            existingMetadata.style === style &&
+                            existingMetadata.primary_color === currentPrimary &&
+                            existingMetadata.secondary_color === currentSecondary &&
+                            existingMetadata.shading_type === currentShading) {
+                            
+                            if (isColor) {
+                                metadataMatches = true;
+                            } else {
+                                const fileToCheck = Gio.File.new_for_path(targetPath);
+                                if (fileToCheck.query_exists(null)) {
+                                    metadataMatches = true;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('[WACK/Extension] Failed to verify existing metadata: ' + e);
                 }
             }
 
+            let success = metadataMatches;
+
+            if (!metadataMatches && uri && uri.startsWith('file://') && !isColor) {
+                let realSrcFile = null;
+                const srcFile = Gio.File.new_for_uri(uri);
+                if (srcFile.query_exists(null)) {
+                    if (isXml) {
+                        try {
+                            const [loadSuccess, contents] = srcFile.load_contents(null);
+                            if (loadSuccess) {
+                                const xmlText = new TextDecoder().decode(contents);
+                                const files = [];
+                                const regex = /<file>([^<]+)<\/file>/g;
+                                let match;
+                                while ((match = regex.exec(xmlText)) !== null) {
+                                    files.push(match[1].trim());
+                                }
+                                if (files.length > 0) {
+                                    let chosenPath = files[0];
+                                    if (colorScheme === 1 && files.length > 1) {
+                                        chosenPath = files[files.length - 1];
+                                    }
+                                    realSrcFile = Gio.File.new_for_path(chosenPath);
+                                    console.log('[WACK/Extension] XML slideshow: resolved chosen image path ' + chosenPath);
+                                }
+                            }
+                        } catch (err) {
+                            console.log('[WACK/Extension] Failed to parse XML slideshow: ' + err);
+                        }
+                    } else {
+                        realSrcFile = srcFile;
+                    }
+
+                    if (realSrcFile && realSrcFile.query_exists(null)) {
+                        try {
+                            const srcPath = realSrcFile.get_path();
+                            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(srcPath);
+                            const w = pixbuf.get_width();
+                            const h = pixbuf.get_height();
+                            
+                            const MAX_DIM = 2560;
+                            let scaleW = w;
+                            let scaleH = h;
+                            if (w > MAX_DIM || h > MAX_DIM) {
+                                if (w > h) {
+                                    scaleW = MAX_DIM;
+                                    scaleH = Math.round((h * MAX_DIM) / w);
+                                } else {
+                                    scaleH = MAX_DIM;
+                                    scaleW = Math.round((w * MAX_DIM) / h);
+                                }
+                            }
+                            
+                            const scaled = pixbuf.scale_simple(scaleW, scaleH, GdkPixbuf.InterpType.BILINEAR);
+                            scaled.savev(targetPath, 'jpeg', ['quality'], ['80']);
+                            
+                            const destFile = Gio.File.new_for_path(targetPath);
+                            destFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+                            success = true;
+                            console.log('[WACK/Extension] Successfully optimized and saved resolved wallpaper JPEG');
+                        } catch (err) {
+                            console.log('[WACK/Extension] Fallback to direct copy due to GdkPixbuf error: ' + err);
+                            const srcPath = realSrcFile.get_path();
+                            let srcExt = '.jpg';
+                            const lastDot = srcPath.lastIndexOf('.');
+                            if (lastDot !== -1) {
+                                srcExt = srcPath.substring(lastDot);
+                            }
+                            targetPath = `/var/tmp/wack-shared-wallpaper-${userName}${srcExt}`;
+                            const destFile = Gio.File.new_for_path(targetPath);
+                            realSrcFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null);
+                            destFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+                            success = true;
+                        }
+                    }
+                }
+            }
+
+            // Write metadata if it changed or doesn't exist
             const metadata = {
-                uri: success ? `file://${targetPath}` : uri,
+                username: userName,
+                source_uri: uri,
+                uri: (success && !isColor) ? `file://${targetPath}` : uri,
                 style: style,
                 primary_color: this._bgSettings.get_string('primary-color'),
                 secondary_color: this._bgSettings.get_string('secondary-color'),
                 shading_type: this._bgSettings.get_enum('color-shading-type'),
-                is_color: !success
+                is_color: isColor
             };
 
-            const metaFile = Gio.File.new_for_path(`/tmp/wack-shared-wallpaper-${userName}.json`);
-            metaFile.replace_contents(
-                JSON.stringify(metadata),
-                null,
-                false,
-                Gio.FileCreateFlags.REPLACE_DESTINATION,
-                null
-            );
-            metaFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+            if (!metadataMatches) {
+                metaFile.replace_contents(
+                    JSON.stringify(metadata),
+                    null,
+                    false,
+                    Gio.FileCreateFlags.REPLACE_DESTINATION,
+                    null
+                );
+                metaFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+            }
+
+            // Always update active GDM wallpaper to point to user userName
+            console.log('[WACK/Extension] Updating active GDM wallpaper to point to user ' + userName);
+            try {
+                const activeMetaFile = Gio.File.new_for_path(`/var/tmp/wack-active-wallpaper.json`);
+                let activeMetadata = { ...metadata };
+                if (success && !isColor) {
+                    let activeExt = '.jpg';
+                    const lastDot = targetPath.lastIndexOf('.');
+                    if (lastDot !== -1) {
+                        activeExt = targetPath.substring(lastDot);
+                    }
+                    const activeTargetPath = `/var/tmp/wack-active-wallpaper${activeExt}`;
+                    const activeDestFile = Gio.File.new_for_path(activeTargetPath);
+                    const destFile = Gio.File.new_for_path(targetPath);
+                    destFile.copy(activeDestFile, Gio.FileCopyFlags.OVERWRITE, null, null);
+                    activeDestFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+                    activeMetadata.uri = `file://${activeTargetPath}`;
+                }
+                activeMetaFile.replace_contents(
+                    JSON.stringify(activeMetadata),
+                    null,
+                    false,
+                    Gio.FileCreateFlags.REPLACE_DESTINATION,
+                    null
+                );
+                activeMetaFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
+            } catch (err) {
+                console.log('[WACK/Extension] Failed to save active wallpaper: ' + err);
+            }
         } catch (e) {
             console.log('[WACK/Extension] Failed to save wallpaper: ' + e);
         }

@@ -110,8 +110,8 @@
 
 .login-dialog .user-widget .user-widget-label {
     font-weight: 600;
-    font-size: 16px;
-    color: 0.85;
+    font-size: 19px;
+    color: rgba(255, 255, 255, 0.8);
     text-shadow: 0 1px 10px rgba(0, 0, 0, 0.575);
 }
 
@@ -156,7 +156,7 @@
 }
 
 .login-dialog-user-list-view {
-    width: 180px !important;
+    width: auto !important;
 }
 
 .login-dialog-user-list-item {
@@ -187,7 +187,7 @@
 
 .wack-avatar-well .user-icon {
     transition-duration: 150ms;
-    border-radius: 99px;
+    border-radius: 999px;
     box-shadow: inset 0 0 0 0px rgba(255, 255, 255, 0);
 }
 
@@ -209,6 +209,7 @@
 
 .wack-cupertino-rest .user-widget.vertical .user-icon {
     icon-size: 58px !important;
+    opacity: 0 !important;
 }
 
 .unlock-dialog .wack-cupertino-prompt .user-widget.vertical .user-icon {

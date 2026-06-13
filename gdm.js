@@ -7,6 +7,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import Meta from 'gi://Meta';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import { WackClock } from './wackClock.js';
 import { WackCupertinoRestPrompt } from './cupertinoPrompt.js';
@@ -37,6 +38,7 @@ export class GdmManager {
         this._backgroundGroup = null;
         this._bgManagers = [];
         this._monitorsChangedId = null;
+        this._appliedWallpaperUser = undefined;
     }
 
     enable() {
@@ -45,16 +47,15 @@ export class GdmManager {
         if (Main.sessionMode.currentMode !== 'gdm') return;
         this._active = true;
 
-        // Try to find the LoginDialog and SystemBackground
+        // Try to find the LoginDialog
         let attempts = 0;
         const findDialog = () => {
             if (!this._active)
                 return GLib.SOURCE_REMOVE;
 
             const dialog = this._findLoginDialog();
-            const systemBgActor = Main.layoutManager?._systemBackground;
 
-            if (dialog && systemBgActor && systemBgActor.content?.background) {
+            if (dialog) {
                 this._dialog = dialog;
                 this._setup();
                 this._applyWallpaper();
@@ -64,7 +65,7 @@ export class GdmManager {
 
             attempts++;
             if (attempts > 50) {
-                console.log('[WACK/GdmManager] Could not find LoginDialog or SystemBackground after 50 attempts');
+                console.log('[WACK/GdmManager] Could not find LoginDialog after 50 attempts');
                 this._findDialogTimeoutId = null;
                 return GLib.SOURCE_REMOVE;
             }
@@ -120,8 +121,8 @@ export class GdmManager {
 
         // Setup background group and managers (similar to UnlockDialog)
         this._backgroundGroup = new Clutter.Actor();
-        dialog.add_child(this._backgroundGroup);
-        dialog.set_child_below_sibling(this._backgroundGroup, null);
+        this._dialogParent.add_child(this._backgroundGroup);
+        this._dialogParent.set_child_below_sibling(this._backgroundGroup, dialog);
 
         this._bgManagers = [];
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => {
@@ -185,7 +186,11 @@ export class GdmManager {
         // 5. On prompt show: reposition native _authPrompt and style as Cupertino
         this._origShowPrompt = dialog._showPrompt.bind(dialog);
         dialog._showPrompt = (...args) => {
+            const wasVisible = dialog._authPrompt.visible;
             this._origShowPrompt(...args);
+            if (!wasVisible) {
+                this._applyWallpaper();
+            }
             this._onUserSelected();
         };
 
@@ -370,7 +375,7 @@ export class GdmManager {
         const currentY = authPrompt.get_allocation_box().y1;
         authPrompt.translation_y = targetY - currentY;
 
-        authPrompt.translation_x = Math.floor(w / 2 - promptW / 2) - (authPrompt.x || 0) - 1;
+        authPrompt.translation_x = Math.floor(w / 2 - promptW / 2) - (authPrompt.x || 0);
         console.log('[WACK/GdmManager] positionAuthPrompt currentY:', currentY, 'targetY:', targetY, 'translation_y:', authPrompt.translation_y, 'translation_x:', authPrompt.translation_x, 'wellH:', wellH, 'anchorH:', anchorH);
     }
 
@@ -385,13 +390,57 @@ export class GdmManager {
             effect: new Shell.BlurEffect({ name: 'blur' }),
         });
 
-        let bgManager = new Background.BackgroundManager({
-            container: widget,
-            monitorIndex,
-            controlPosition: false,
+        let bgActorA = new Meta.BackgroundActor({
+            meta_display: global.display,
+            monitor: monitorIndex,
+            x_expand: true,
+            y_expand: true,
         });
 
-        this._bgManagers.push(bgManager);
+        let bgA = new Meta.Background({ meta_display: global.display });
+
+        bgActorA.content.set({
+            background: bgA,
+            vignette: false,
+            vignette_sharpness: 0.5,
+            brightness: 0.5,
+        });
+        bgActorA.opacity = 255;
+
+        let bgActorB = new Meta.BackgroundActor({
+            meta_display: global.display,
+            monitor: monitorIndex,
+            x_expand: true,
+            y_expand: true,
+        });
+
+        let bgB = new Meta.Background({ meta_display: global.display });
+
+        bgActorB.content.set({
+            background: bgB,
+            vignette: false,
+            vignette_sharpness: 0.5,
+            brightness: 0.5,
+        });
+        bgActorB.opacity = 0;
+
+        widget.add_child(bgActorA);
+        widget.add_child(bgActorB);
+
+        this._bgManagers.push({
+            bgActorA: bgActorA,
+            bgA: bgA,
+            bgActorB: bgActorB,
+            bgB: bgB,
+            activeActor: 'A',
+            destroy() {
+                bgActorA.destroy();
+                bgA.destroy();
+                bgActorB.destroy();
+                bgB.destroy();
+            }
+        });
+
         this._backgroundGroup.add_child(widget);
     }
 
@@ -421,6 +470,7 @@ export class GdmManager {
             this._createBackground(i);
 
         this._updateBackgroundEffects();
+        this._appliedWallpaperUser = undefined;
         this._applyWallpaper();
     }
 
@@ -428,61 +478,174 @@ export class GdmManager {
 
     _applyWallpaper(userName = null) {
         try {
-            if (!this._bgManagers || this._bgManagers.length === 0)
+            if (!this._bgManagers || this._bgManagers.length === 0) {
+                console.log('[WACK/GdmManager] _applyWallpaper: no background managers, returning');
                 return;
+            }
 
             let user = this._dialog?._user;
             let selectedUserName = userName || (user ? user.get_user_name() : null);
 
-            let success = false;
-            if (selectedUserName) {
-                const metaFile = Gio.File.new_for_path(`/tmp/wack-shared-wallpaper-${selectedUserName}.json`);
-                if (metaFile.query_exists(null)) {
-                    const [loadSuccess, contents] = metaFile.load_contents(null);
-                    if (loadSuccess) {
-                        const metadata = JSON.parse(new TextDecoder().decode(contents));
-                        if (metadata) {
-                            for (const bgManager of this._bgManagers) {
-                                const bg = bgManager.backgroundActor?.content?.background;
-                                if (bg) {
-                                    if (metadata.is_color) {
-                                        let [res, color] = Cogl.Color.from_string(metadata.primary_color);
-                                        if (res) {
-                                            if (metadata.shading_type === 0) { // SOLID
-                                                bg.set_color(color);
-                                            } else {
-                                                let [res2, secondColor] = Cogl.Color.from_string(metadata.secondary_color);
-                                                if (res2) {
-                                                    bg.set_gradient(metadata.shading_type, color, secondColor);
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        const file = Gio.File.new_for_uri(metadata.uri);
-                                        bg.set_file(file, metadata.style);
-                                    }
-                                }
-                            }
-                            success = true;
-                        }
+            let metaFile = null;
+            let isUsingActiveFallback = false;
+
+            if (!selectedUserName) {
+                const activeMetaFile = Gio.File.new_for_path('/var/tmp/wack-active-wallpaper.json');
+                if (activeMetaFile.query_exists(null)) {
+                    metaFile = activeMetaFile;
+                    isUsingActiveFallback = true;
+                }
+            }
+
+            if (!metaFile && selectedUserName) {
+                metaFile = Gio.File.new_for_path(`/var/tmp/wack-shared-wallpaper-${selectedUserName}.json`);
+            }
+
+            let resolvedUserName = selectedUserName;
+            let metadata = null;
+
+            if (metaFile && metaFile.query_exists(null)) {
+                const [loadSuccess, contents] = metaFile.load_contents(null);
+                if (loadSuccess) {
+                    metadata = JSON.parse(new TextDecoder().decode(contents));
+                    if (metadata && isUsingActiveFallback) {
+                        resolvedUserName = metadata.username || null;
                     }
                 }
             }
 
+            console.log(`[WACK/GdmManager] _applyWallpaper called: userName=${userName}, dialogUser=${user ? user.get_user_name() : 'null'}, resolved=${resolvedUserName}`);
+
+            // Only skip if the prompt is already visible and we already applied the wallpaper for this user
+            if (this._dialog?._authPrompt?.visible && this._appliedWallpaperUser === resolvedUserName) {
+                console.log(`[WACK/GdmManager] _applyWallpaper: user ${resolvedUserName} already applied and prompt is visible, skipping`);
+                return;
+            }
+
+            let success = false;
+            if (metadata) {
+                const isFirstLoad = (this._appliedWallpaperUser === undefined);
+
+                for (const bgManager of this._bgManagers) {
+                    if (isFirstLoad) {
+                        const bg = bgManager.bgA;
+                        if (metadata.is_color) {
+                            let [res, color] = Cogl.Color.from_string(metadata.primary_color);
+                            if (res) {
+                                if (metadata.shading_type === 0) {
+                                    bg.set_color(color);
+                                } else {
+                                    let [res2, secondColor] = Cogl.Color.from_string(metadata.secondary_color);
+                                    if (res2) {
+                                        bg.set_gradient(metadata.shading_type, color, secondColor);
+                                    }
+                                }
+                            }
+                        } else {
+                            const file = Gio.File.new_for_uri(metadata.uri);
+                            bg.set_file(file, metadata.style);
+                        }
+                        bgManager.bgActorA.opacity = 255;
+                        bgManager.bgActorB.opacity = 0;
+                        bgManager.activeActor = 'A';
+                    } else {
+                        let targetActor, activeActor;
+                        let targetBg;
+                        if (bgManager.activeActor === 'A') {
+                            targetActor = bgManager.bgActorB;
+                            targetBg = bgManager.bgB;
+                            activeActor = bgManager.bgActorA;
+                            bgManager.activeActor = 'B';
+                        } else {
+                            targetActor = bgManager.bgActorA;
+                            targetBg = bgManager.bgA;
+                            activeActor = bgManager.bgActorB;
+                            bgManager.activeActor = 'A';
+                        }
+
+                        if (metadata.is_color) {
+                            let [res, color] = Cogl.Color.from_string(metadata.primary_color);
+                            if (res) {
+                                if (metadata.shading_type === 0) {
+                                    targetBg.set_color(color);
+                                } else {
+                                    let [res2, secondColor] = Cogl.Color.from_string(metadata.secondary_color);
+                                    if (res2) {
+                                        targetBg.set_gradient(metadata.shading_type, color, secondColor);
+                                    }
+                                }
+                            }
+                        } else {
+                            const file = Gio.File.new_for_uri(metadata.uri);
+                            console.log(`[WACK/GdmManager] setting background file: ${metadata.uri}`);
+                            targetBg.set_file(file, metadata.style);
+                        }
+
+                        targetActor.ease({
+                            opacity: 255,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+
+                        activeActor.ease({
+                            opacity: 0,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+                    }
+                }
+                success = true;
+            }
+
             if (!success) {
+                console.log(`[WACK/GdmManager] falling back to org.gnome.desktop.background settings`);
                 const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
                 const uri = bgSettings.get_string('picture-uri');
                 const style = bgSettings.get_enum('picture-options');
+                console.log(`[WACK/GdmManager] fallback uri=${uri}, style=${style}`);
                 if (uri) {
                     const file = Gio.File.new_for_uri(uri);
+                    const isFirstLoad = (this._appliedWallpaperUser === undefined);
+
                     for (const bgManager of this._bgManagers) {
-                        const bg = bgManager.backgroundActor?.content?.background;
-                        if (bg) {
-                            bg.set_file(file, style);
+                        if (isFirstLoad) {
+                            bgManager.bgA.set_file(file, style);
+                            bgManager.bgActorA.opacity = 255;
+                            bgManager.bgActorB.opacity = 0;
+                            bgManager.activeActor = 'A';
+                        } else {
+                            let targetActor, activeActor;
+                            let targetBg;
+                            if (bgManager.activeActor === 'A') {
+                                targetActor = bgManager.bgActorB;
+                                targetBg = bgManager.bgB;
+                                activeActor = bgManager.bgActorA;
+                                bgManager.activeActor = 'B';
+                            } else {
+                                targetActor = bgManager.bgActorA;
+                                targetBg = bgManager.bgA;
+                                activeActor = bgManager.bgActorB;
+                                bgManager.activeActor = 'A';
+                            }
+
+                            targetBg.set_file(file, style);
+
+                            targetActor.ease({
+                                opacity: 255,
+                                duration: GDM_CROSSFADE_DURATION,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
+
+                            activeActor.ease({
+                                opacity: 0,
+                                duration: GDM_CROSSFADE_DURATION,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
                         }
                     }
                 }
             }
+            this._appliedWallpaperUser = resolvedUserName;
         } catch (e) {
             console.log('[WACK/GdmManager] Failed to apply wallpaper: ' + e);
         }
@@ -491,11 +654,9 @@ export class GdmManager {
     // ── User selection ────────────────────────────────────────────────────────
 
     _onUserSelected() {
+        console.log('[WACK/GdmManager] _onUserSelected called');
         const authPrompt = this._dialog?._authPrompt;
         if (!authPrompt) return;
-
-        // Apply selected user's wallpaper
-        this._applyWallpaper();
 
         // Recreate the dummy rest prompt with the current GDM user to get exact same font/avatar metrics
         if (this._cupertinoRestPromptContainer) {
@@ -533,6 +694,7 @@ export class GdmManager {
     }
 
     _onReset() {
+        console.log('[WACK/GdmManager] _onReset called');
         const authPrompt = this._dialog?._authPrompt;
         if (!authPrompt) return;
 
