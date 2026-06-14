@@ -82,7 +82,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._originalCupertinoText = null;
         this._originalCupertinoCount = 0;
         this._animationState = createAnimationState();
-        
+
         // Track state transitions to prevent redundant side-effects
         this._wasPromptActive = false;
 
@@ -244,12 +244,12 @@ export default class WackLockscreenClockExtension extends Extension {
 
         this._dateLabel = dateLabel;
         this._timeLabel = timeLabel;
-        
+
         timeLabel.connectObject('notify::text', () => this._positionClock(), this);
         // Allocation changes are now handled cleanly by Clutter constraints
         timeLabel.connectObject('notify::allocation', () => this._centerClockLabel(timeLabel), this);
         dateLabel.connectObject('notify::allocation', () => this._centerClockLabel(dateLabel), this);
-        
+
         this._positionClock();
 
         // ── Hint Container Setup ──────────────────────────────────────────
@@ -260,7 +260,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._hintContainer.add_child(hint);
         this._hint = hint;
         this._hintText = hint.text;
-        
+
         hint.connectObject(
             'notify::text', () => {
                 if (!this._overflowActive && !this._showingInhibitHint) {
@@ -295,7 +295,7 @@ export default class WackLockscreenClockExtension extends Extension {
         // ── Input Handling ────────────────────────────────────────────────
         dialog.connectObject('key-press-event', (actor, event) => {
             const keysym = event.get_key_symbol();
-            
+
             if (keysym === Clutter.KEY_Escape && !this._promptActive) {
                 if (this._escToSleep) {
                     if (this._lockscreenMode === 'cupertino' && this._cupertinoAlwaysShowUser) {
@@ -348,18 +348,18 @@ export default class WackLockscreenClockExtension extends Extension {
 
             // Unified state derivation: no more redundant assignments
             const isNowActive = this._promptActive;
-            
+
             if (isNowActive && !this._wasPromptActive) {
                 this._onPromptShow();
                 const origEase = dialog._adjustment.ease;
                 dialog._adjustment.ease = () => { };
-                try { dialog._showPrompt(); } 
+                try { dialog._showPrompt(); }
                 finally { dialog._adjustment.ease = origEase; }
             } else if (!isNowActive && this._wasPromptActive) {
                 this._onPromptHide();
                 const origEase = dialog._adjustment.ease;
                 dialog._adjustment.ease = () => { };
-                try { dialog._showClock(); } 
+                try { dialog._showClock(); }
                 finally { dialog._adjustment.ease = origEase; }
             }
             this._wasPromptActive = isNowActive;
@@ -376,7 +376,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
             const hasNotifs = this._notifManager.hasVisibleNotifs();
             const cardBlur = hasNotifs ? NOTIF_BLUR_RADIUS * (1 - progress) : 0;
-            
+
             if (this._notifManager._notifBox && this._notifManager._notifBox._notificationBox) {
                 for (let child = this._notifManager._notifBox._notificationBox.get_first_child(); child !== null; child = child.get_next_sibling()) {
                     let effect = child.get_effect(NOTIF_BLUR_NAME);
@@ -493,7 +493,7 @@ export default class WackLockscreenClockExtension extends Extension {
             const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
             const targetRadius = isCupertino ? 0 : PROMPT_BLUR_RADIUS * scaleFactor * progress;
             const targetBrightness = isCupertino ? 1.0 : 1.0 - (1.0 - PROMPT_BLUR_BRIGHTNESS) * progress;
-            
+
             for (const widget of this._dialog?._backgroundGroup ?? []) {
                 const effect = widget.get_effect('blur');
                 if (effect) effect.set({ radius: targetRadius, brightness: targetBrightness });
@@ -581,7 +581,7 @@ export default class WackLockscreenClockExtension extends Extension {
             this._notifManager.enforceCardLimit(this._notifManager._notifBox);
         }
         this._updateCupertinoRestState();
-        
+
         if (this._lockscreenMode === 'cupertino') {
             const hasNotifs = this._notifManager.hasVisibleNotifs();
             this._cupertinoIconSnap = !hasNotifs;
@@ -1110,13 +1110,9 @@ export default class WackLockscreenClockExtension extends Extension {
     _tempSessionModeOverride() {
         if (this._origSessionModeProps) return;
         this._origSessionModeProps = {
-            hasWindows: Main.sessionMode.hasWindows,
-            hasWorkspaces: Main.sessionMode.hasWorkspaces,
             panel: Main.sessionMode.panel,
             panelStyle: Main.sessionMode.panelStyle,
         };
-        Main.sessionMode.hasWindows = true;
-        Main.sessionMode.hasWorkspaces = true;
         Main.sessionMode.panel = {
             left: ['activities'],
             center: ['dateMenu'],
@@ -1128,8 +1124,6 @@ export default class WackLockscreenClockExtension extends Extension {
 
     _restoreSessionMode() {
         if (!this._origSessionModeProps) return;
-        Main.sessionMode.hasWindows = this._origSessionModeProps.hasWindows;
-        Main.sessionMode.hasWorkspaces = this._origSessionModeProps.hasWorkspaces;
         Main.sessionMode.panel = this._origSessionModeProps.panel;
         Main.sessionMode.panelStyle = this._origSessionModeProps.panelStyle;
         this._origSessionModeProps = null;
@@ -1164,7 +1158,7 @@ export default class WackLockscreenClockExtension extends Extension {
         return null;
     }
 
- 
+
 
     disable() {
         // Guideline EGO-M-008: Documenting use of unlock-dialog.
@@ -1356,7 +1350,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._origLayout = null;
         this._overflowActive = false;
         this._hintText = null;
-        
+
         if (this._promptActor && this._origPromptActorYAlign !== undefined) {
             this._promptActor.y_align = this._origPromptActorYAlign;
             this._origPromptActorYAlign = undefined;
