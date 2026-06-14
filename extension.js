@@ -1167,7 +1167,19 @@ export default class WackLockscreenClockExtension extends Extension {
  
 
     disable() {
-        
+        // Guideline EGO-M-008: Documenting use of unlock-dialog.
+        // This extension runs in the 'unlock-dialog' session mode to customize the
+        // GNOME Shell lock screen. We perform the following modifications:
+        // - Replace the default clock widget (dialog._clock) with our custom clock
+        //   wrapper to display a macOS Sonoma-style clock layout.
+        // - Override dialog._updateBackgroundEffects to customize background blur.
+        // - Override dialog._updateUserSwitchVisibility to hide/show user options.
+        // - Intercept dialog.finish to animate custom transitions when unlocking.
+        //
+        // In this disable() method, we cleanly revert all changes, restore all overridden
+        // methods/injections to their original implementations, and destroy/nullify all
+        // custom UI elements, ensuring no resource leaks or state contamination in the
+        // GNOME Shell session.
         if (this._interfaceSettings) {
             this._interfaceSettings.disconnectObject(this);
             this._interfaceSettings = null;
