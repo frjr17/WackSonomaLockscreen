@@ -225,7 +225,8 @@
     opacity: 1 !important;
 }
 
-.wack-cupertino-rest .wack-avatar-well .user-icon StIcon {
+.wack-cupertino-rest .wack-avatar-well .user-icon StIcon,
+.wack-cupertino-prompt .wack-avatar-well .user-icon StIcon {
     padding: 10px;
 }
 

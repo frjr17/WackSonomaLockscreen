@@ -47,6 +47,10 @@ export class GdmManager {
         this._bgManagers = [];
         this._monitorsChangedId = null;
         this._appliedWallpaperUser = undefined;
+        this._gdmAvatarSetup = false;
+        this._gdmOrigUpdateUser = null;
+        this._gdmOrigMethodName = null;
+        this._gdmOrigUserWellYAlign = null;
     }
 
     enable() {
@@ -210,6 +214,8 @@ export class GdmManager {
             this._origOnReset(...args);
             this._onReset();
         };
+
+        this._setupGdmAvatarOverride();
     }
 
     // ── Teardown ──────────────────────────────────────────────────────────────
@@ -312,6 +318,8 @@ export class GdmManager {
                 bg.set_color(color);
             }
         }
+
+        this._teardownGdmAvatarOverride();
 
         this._dialogParent = null;
         this._dialog = null;
@@ -549,16 +557,25 @@ export class GdmManager {
                     _log(`[WACK/GdmManager] setting inline CSS background on St.Widget`);
                     targetWidget.set_style(styleStr);
 
-                    targetWidget.ease({
-                        opacity: 255,
-                        duration: GDM_CROSSFADE_DURATION,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    });
-                    activeWidget.ease({
-                        opacity: 0,
-                        duration: GDM_CROSSFADE_DURATION,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    });
+                    let isFirstRun = this._appliedWallpaperUser === undefined;
+
+                    if (isFirstRun) {
+                        targetWidget.remove_transition('opacity');
+                        activeWidget.remove_transition('opacity');
+                        targetWidget.opacity = 255;
+                        activeWidget.opacity = 0;
+                    } else {
+                        targetWidget.ease({
+                            opacity: 255,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+                        activeWidget.ease({
+                            opacity: 0,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+                    }
 
                     bgManager.activeIsA = !bgManager.activeIsA;
                 }
@@ -590,16 +607,25 @@ export class GdmManager {
                         let styleStr = `background-image: url("${uri}"); background-size: ${bgSize}; background-position: ${bgPos}; background-repeat: ${bgRepeat};`;
                         targetWidget.set_style(styleStr);
 
-                        targetWidget.ease({
-                            opacity: 255,
-                            duration: GDM_CROSSFADE_DURATION,
-                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                        });
-                        activeWidget.ease({
-                            opacity: 0,
-                            duration: GDM_CROSSFADE_DURATION,
-                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                        });
+                        let isFirstRun = this._appliedWallpaperUser === undefined;
+
+                        if (isFirstRun) {
+                            targetWidget.remove_transition('opacity');
+                            activeWidget.remove_transition('opacity');
+                            targetWidget.opacity = 255;
+                            activeWidget.opacity = 0;
+                        } else {
+                            targetWidget.ease({
+                                opacity: 255,
+                                duration: GDM_CROSSFADE_DURATION,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
+                            activeWidget.ease({
+                                opacity: 0,
+                                duration: GDM_CROSSFADE_DURATION,
+                                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                            });
+                        }
 
                         bgManager.activeIsA = !bgManager.activeIsA;
                     }
@@ -645,8 +671,14 @@ export class GdmManager {
         }
 
         // Make native avatar visible — don't suppress it
-        const avatar = authPrompt._userWell?.get_child()?._avatar;
-        if (avatar) avatar.opacity = 255;
+        const uw = authPrompt._userWell?.get_child();
+        if (uw) {
+            if (uw._avatar) uw._avatar.opacity = 255;
+            if (uw._avatarButton) {
+                uw._avatarButton.opacity = 255;
+                uw._avatarButton.visible = true;
+            }
+        }
 
         // Apply selected user's wallpaper with transition
         if (this._dialog._user) {
@@ -691,5 +723,100 @@ export class GdmManager {
 
         // Restore background to the last active user
         this._applyWallpaper(null);
+    }
+
+    _setupGdmAvatarOverride() {
+        if (this._gdmAvatarSetup) return;
+        const authPrompt = this._dialog?._authPrompt;
+        if (!authPrompt) return;
+        this._gdmAvatarSetup = true;
+
+        if (authPrompt._userWell) {
+            this._gdmOrigUserWellYAlign = authPrompt._userWell.y_align;
+            authPrompt._userWell.y_align = Clutter.ActorAlign.START;
+        }
+
+        if (!this._gdmOrigUpdateUser) {
+            const methodName = authPrompt.setUser ? 'setUser' : 'updateUser';
+            this._gdmOrigMethodName = methodName;
+            this._gdmOrigUpdateUser = authPrompt[methodName].bind(authPrompt);
+            authPrompt[methodName] = (user) => {
+                this._gdmOrigUpdateUser(user);
+                this._wrapGdmAvatar();
+            };
+            this._wrapGdmAvatar();
+        }
+
+        authPrompt.connectObject('destroy', () => this._teardownGdmAvatarOverride(), this);
+    }
+
+    _teardownGdmAvatarOverride() {
+        const authPrompt = this._dialog?._authPrompt;
+        if (authPrompt) authPrompt.disconnectObject(this);
+
+        if (authPrompt && authPrompt._userWell && this._gdmOrigUserWellYAlign !== undefined) {
+            authPrompt._userWell.y_align = this._gdmOrigUserWellYAlign;
+            this._gdmOrigUserWellYAlign = null;
+        }
+
+        if (authPrompt && this._gdmOrigUpdateUser && this._gdmOrigMethodName) {
+            authPrompt[this._gdmOrigMethodName] = this._gdmOrigUpdateUser;
+        }
+        this._gdmOrigUpdateUser = null;
+        this._gdmOrigMethodName = null;
+
+        this._unwrapGdmAvatar();
+        this._gdmAvatarSetup = false;
+    }
+
+    _wrapGdmAvatar() {
+        const authPrompt = this._dialog?._authPrompt;
+        if (!authPrompt) {
+            _log('[WACK/GdmManager] _wrapGdmAvatar: no authPrompt');
+            return;
+        }
+
+        const uw = authPrompt._userWell?.get_child();
+        _log(`[WACK/GdmManager] _wrapGdmAvatar: uw=${uw?.constructor?.name}, child=${uw}`);
+        if (uw) {
+            _log(`[WACK/GdmManager] _wrapGdmAvatar: uw._avatar=${uw._avatar}, uw._avatarButton=${uw._avatarButton}`);
+            const childrenNames = uw.get_children().map(c => c.constructor.name);
+            _log(`[WACK/GdmManager] _wrapGdmAvatar: uw children: ${childrenNames.join(', ')}`);
+        }
+
+        if (uw && uw._avatar && !uw._avatarButton) {
+            const avatar = uw._avatar;
+            _log('[WACK/GdmManager] _wrapGdmAvatar: wrapping avatar in St.Button');
+            uw.remove_child(avatar);
+            
+            uw._avatarButton = new St.Button({
+                style_class: 'wack-avatar-well',
+                x_expand: false,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.START,
+                can_focus: false,
+                child: avatar,
+                reactive: false,
+            });
+            uw.insert_child_at_index(uw._avatarButton, 0);
+            _log('[WACK/GdmManager] _wrapGdmAvatar: wrapping completed successfully');
+        }
+    }
+
+    _unwrapGdmAvatar() {
+        const authPrompt = this._dialog?._authPrompt;
+        if (!authPrompt) return;
+
+        const uw = authPrompt._userWell?.get_child();
+        if (uw && uw._avatarButton) {
+            const button = uw._avatarButton;
+            const avatar = button.get_child();
+            if (avatar) {
+                button.set_child(null);
+                uw.remove_child(button);
+                uw.insert_child_at_index(avatar, 0);
+            }
+            uw._avatarButton = null;
+        }
     }
 }
