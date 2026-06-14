@@ -16,6 +16,7 @@ import {
     GDM_DATETIME_TOP_FRACTION,
     DATE_LABEL_HEIGHT,
     CUPERTINO_PROMPT_VERTICAL_FRACTION,
+    GDM_CROSSFADE_DURATION,
 } from './constants.js';
 
 function _log(msg) {
@@ -390,7 +391,8 @@ export class GdmManager {
 
     _createBackground(monitorIndex) {
         let monitor = Main.layoutManager.monitors[monitorIndex];
-        let widget = new St.Widget({
+        
+        let createWidget = () => new St.Widget({
             style_class: 'screen-shield-background',
             x: monitor.x,
             y: monitor.y,
@@ -399,14 +401,23 @@ export class GdmManager {
             effect: new Shell.BlurEffect({ name: 'blur' }),
         });
 
+        let widgetA = createWidget();
+        let widgetB = createWidget();
+        
+        widgetB.opacity = 0; // Starts hidden
+
+        this._backgroundGroup.add_child(widgetA);
+        this._backgroundGroup.add_child(widgetB);
+
         this._bgManagers.push({
-            widget: widget,
+            widgetA,
+            widgetB,
+            activeIsA: true,
             destroy() {
-                widget.destroy();
+                widgetA.destroy();
+                widgetB.destroy();
             }
         });
-
-        this._backgroundGroup.add_child(widget);
     }
 
     _updateBackgroundEffects() {
@@ -440,7 +451,7 @@ export class GdmManager {
 
     // ── Wallpaper application ────────────────────────────────────────────────
 
-    _applyWallpaper() {
+    _applyWallpaper(requestedUserName = null) {
         try {
             if (!this._backgroundGroup) {
                 this._backgroundGroup = new Clutter.Actor();
@@ -456,31 +467,37 @@ export class GdmManager {
                 this._appliedWallpaperUser = undefined;
             }
 
-            // Find the most recently modified user metadata file
+            let resolvedUserName = requestedUserName;
             let metaFile = null;
-            try {
-                const dir = Gio.File.new_for_path('/var/tmp');
-                if (dir.query_exists(null)) {
-                    const enumerator = dir.enumerate_children(
-                        'standard::name,time::modified',
-                        Gio.FileQueryInfoFlags.NONE,
-                        null
-                    );
-                    let maxMtime = 0;
-                    let info;
-                    while ((info = enumerator.next_file(null)) !== null) {
-                        const name = info.get_name();
-                        if (name.startsWith('wack-shared-wallpaper-') && name.endsWith('.json')) {
-                            const mtime = info.get_attribute_uint64('time::modified');
-                            if (mtime > maxMtime) {
-                                maxMtime = mtime;
-                                metaFile = Gio.File.new_for_path(`/var/tmp/${name}`);
+
+            if (!resolvedUserName) {
+                // Find the most recently modified user metadata file
+                try {
+                    const dir = Gio.File.new_for_path('/var/tmp');
+                    if (dir.query_exists(null)) {
+                        const enumerator = dir.enumerate_children(
+                            'standard::name,time::modified',
+                            Gio.FileQueryInfoFlags.NONE,
+                            null
+                        );
+                        let maxMtime = 0;
+                        let info;
+                        while ((info = enumerator.next_file(null)) !== null) {
+                            const name = info.get_name();
+                            if (name.startsWith('wack-shared-wallpaper-') && name.endsWith('.json')) {
+                                const mtime = info.get_attribute_uint64('time::modified');
+                                if (mtime > maxMtime) {
+                                    maxMtime = mtime;
+                                    metaFile = Gio.File.new_for_path(`/var/tmp/${name}`);
+                                }
                             }
                         }
                     }
+                } catch (err) {
+                    _log('[WACK/GdmManager] Failed to find most recent user wallpaper: ' + err);
                 }
-            } catch (err) {
-                _log('[WACK/GdmManager] Failed to find most recent user wallpaper: ' + err);
+            } else {
+                metaFile = Gio.File.new_for_path(`/var/tmp/wack-shared-wallpaper-${resolvedUserName}.json`);
             }
 
             let metadata = null;
@@ -489,10 +506,12 @@ export class GdmManager {
                 if (loadSuccess) {
                     metadata = JSON.parse(new TextDecoder().decode(contents));
                 }
+                if (!resolvedUserName && metadata) {
+                    resolvedUserName = metadata.username;
+                }
             }
 
-            let resolvedUserName = metadata ? metadata.username : null;
-            _log(`[WACK/GdmManager] _applyWallpaper resolved last active user: ${resolvedUserName}`);
+            _log(`[WACK/GdmManager] _applyWallpaper resolved user: ${resolvedUserName}`);
 
             if (this._appliedWallpaperUser === resolvedUserName) {
                 return;
@@ -501,9 +520,10 @@ export class GdmManager {
             let success = false;
             if (metadata) {
                 for (const bgManager of this._bgManagers) {
-                    const widget = bgManager.widget;
+                    let activeWidget = bgManager.activeIsA ? bgManager.widgetA : bgManager.widgetB;
+                    let targetWidget = bgManager.activeIsA ? bgManager.widgetB : bgManager.widgetA;
+
                     let styleStr = '';
-                    
                     if (metadata.is_color) {
                         if (metadata.shading_type === 0) {
                             styleStr = `background-color: ${metadata.primary_color};`;
@@ -527,7 +547,20 @@ export class GdmManager {
                         styleStr = `background-image: url("${metadata.uri}"); background-size: ${bgSize}; background-position: ${bgPos}; background-repeat: ${bgRepeat};`;
                     }
                     _log(`[WACK/GdmManager] setting inline CSS background on St.Widget`);
-                    widget.set_style(styleStr);
+                    targetWidget.set_style(styleStr);
+
+                    targetWidget.ease({
+                        opacity: 255,
+                        duration: GDM_CROSSFADE_DURATION,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                    activeWidget.ease({
+                        opacity: 0,
+                        duration: GDM_CROSSFADE_DURATION,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+
+                    bgManager.activeIsA = !bgManager.activeIsA;
                 }
                 success = true;
             }
@@ -539,6 +572,9 @@ export class GdmManager {
                 const style = bgSettings.get_enum('picture-options');
                 if (uri) {
                     for (const bgManager of this._bgManagers) {
+                        let activeWidget = bgManager.activeIsA ? bgManager.widgetA : bgManager.widgetB;
+                        let targetWidget = bgManager.activeIsA ? bgManager.widgetB : bgManager.widgetA;
+
                         let bgSize = 'cover';
                         let bgPos = 'center';
                         let bgRepeat = 'no-repeat';
@@ -552,7 +588,20 @@ export class GdmManager {
                             case 1: bgSize = 'auto'; bgRepeat = 'repeat'; bgPos = 'top left'; break;
                         }
                         let styleStr = `background-image: url("${uri}"); background-size: ${bgSize}; background-position: ${bgPos}; background-repeat: ${bgRepeat};`;
-                        bgManager.widget.set_style(styleStr);
+                        targetWidget.set_style(styleStr);
+
+                        targetWidget.ease({
+                            opacity: 255,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+                        activeWidget.ease({
+                            opacity: 0,
+                            duration: GDM_CROSSFADE_DURATION,
+                            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        });
+
+                        bgManager.activeIsA = !bgManager.activeIsA;
                     }
                 }
             }
@@ -599,6 +648,11 @@ export class GdmManager {
         const avatar = authPrompt._userWell?.get_child()?._avatar;
         if (avatar) avatar.opacity = 255;
 
+        // Apply selected user's wallpaper with transition
+        if (this._dialog._user) {
+            this._applyWallpaper(this._dialog._user.get_user_name());
+        }
+
         // Reposition prompt to lower third on allocation
         this._connectAllocation(authPrompt, () => this._positionAuthPrompt());
         this._positionAuthPrompt();
@@ -634,5 +688,8 @@ export class GdmManager {
             }
             return true;
         });
+
+        // Restore background to the last active user
+        this._applyWallpaper(null);
     }
 }
