@@ -1109,20 +1109,24 @@ export default class WackLockscreenClockExtension extends Extension {
     _tempSessionModeOverride() {
         if (this._origSessionModeProps) return;
         this._origSessionModeProps = {
+            hasWindows: Main.sessionMode.hasWindows,
+            hasWorkspaces: Main.sessionMode.hasWorkspaces,
             panel: Main.sessionMode.panel,
             panelStyle: Main.sessionMode.panelStyle,
         };
+        Main.sessionMode.hasWindows = true;
+        Main.sessionMode.hasWorkspaces = true;
         Main.sessionMode.panel = {
             left: ['activities'],
             center: ['dateMenu'],
-            right: ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'],
-        };
-        Main.sessionMode.panelStyle = null;
+            right: ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'],};        Main.sessionMode.panelStyle = null;
         Main.sessionMode.emit('updated');
     }
 
     _restoreSessionMode() {
         if (!this._origSessionModeProps) return;
+        Main.sessionMode.hasWindows = this._origSessionModeProps.hasWindows;
+        Main.sessionMode.hasWorkspaces = this._origSessionModeProps.hasWorkspaces;
         Main.sessionMode.panel = this._origSessionModeProps.panel;
         Main.sessionMode.panelStyle = this._origSessionModeProps.panelStyle;
         this._origSessionModeProps = null;
