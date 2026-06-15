@@ -199,10 +199,9 @@ export default class WackLockscreenClockExtension extends Extension {
 
                 if (shield._dialog && !shield._isGreeter) shield._dialog.popModal();
 
-                if (shield._isModal) {
+                if (shield._grab) {
                     Main.popModal(shield._grab);
                     shield._grab = null;
-                    shield._isModal = false;
                 }
 
                 shield._longLightbox.lightOff();
