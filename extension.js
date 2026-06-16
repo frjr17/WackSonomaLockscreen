@@ -1193,6 +1193,7 @@ export default class WackLockscreenClockExtension extends Extension {
         );
         this._interfaceSettings.connectObject(
             'changed::color-scheme', save,
+            'changed::clock-format', save,
             this
         );
 
@@ -1434,7 +1435,8 @@ export default class WackLockscreenClockExtension extends Extension {
                 primary_color: this._bgSettings.get_string('primary-color'),
                 secondary_color: this._bgSettings.get_string('secondary-color'),
                 shading_type: this._bgSettings.get_enum('color-shading-type'),
-                is_color: isColor
+                is_color: isColor,
+                clockFormat: this._interfaceSettings.get_string('clock-format'), // ← use existing instance
             };
 
             // Always write the metadata file to update its modification time (mtime)

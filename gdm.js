@@ -521,6 +521,12 @@ export class GdmManager {
 
             _log(`[WACK/GdmManager] _applyWallpaper resolved user: ${resolvedUserName}`);
 
+            // Push the user's clock format preference into WackClock.
+            // The GDM session reads system dconf, not the user's own profile, so we
+            // carry it over via the shared metadata file written by the user session.
+            if (this._gdmClock)
+                this._gdmClock.setClockFormat(metadata?.clockFormat ?? null);
+
             if (this._appliedWallpaperUser === resolvedUserName) {
                 return;
             }

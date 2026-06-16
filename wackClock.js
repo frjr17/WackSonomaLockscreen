@@ -49,8 +49,9 @@ export const WackClock = GObject.registerClass(
             this._wallClock.connectObject('notify::clock',
                 this._updateTime.bind(this), this);
 
-            // Track 12h/24h preference so we can un-pad hours in 24h mode.
-            // Reading system schema (org.gnome.desktop.interface) — no custom .gschema.xml needed
+            // 12h/24h preference — may be overridden externally via setClockFormat()
+            // for GDM where the system dconf doesn't reflect the user's own setting.
+            this._clockFormatOverride = null;
             this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
             this._interfaceSettings.connectObject(
                 'changed::clock-format', () => this._updateTime(), this);
@@ -80,14 +81,31 @@ export const WackClock = GObject.registerClass(
             this._updateTime();
             this._updateDate();
             this._updateHint();
+        }
 
+        /**
+         * Override the 12h/24h format independently of the system gsettings.
+         * Used by GdmManager to inject the last logged-in user's preference.
+         * Pass null to revert to the system setting.
+         * @param {'12h'|'24h'|null} format
+         */
+        setClockFormat(format) {
+            this._clockFormatOverride = format;
+            this._updateTime();
         }
 
         _updateTime() {
-            const raw = this._wallClock.clock.trim();
-            let timeText = raw.replace(/\s*(AM|PM)\s*/i, '').trim();
+            const clockFormat = this._clockFormatOverride
+                ?? this._interfaceSettings.get_string('clock-format');
 
-            this._time.text = timeText;
+            const now = GLib.DateTime.new_now_local();
+
+            if (clockFormat === '12h') {
+                // %-I strips leading zero on hour (Linux only)
+                this._time.text = now.format('%-I:%M');
+            } else {
+                this._time.text = now.format('%H:%M');
+            }
         }
 
         _updateDate() {
@@ -112,6 +130,7 @@ export const WackClock = GObject.registerClass(
 
             this._interfaceSettings.disconnectObject(this);
             this._interfaceSettings = null;
+            this._clockFormatOverride = null;
 
             this._seat.disconnectObject(this);
             this._seat = null;
