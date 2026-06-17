@@ -396,7 +396,7 @@
 .login-dialog-user-list-item {
     height: 58px;
     padding: 6px;
-    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 .login-dialog-user-list-item .user-widget {

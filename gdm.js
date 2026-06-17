@@ -51,6 +51,7 @@ export class GdmManager {
         this._gdmOrigUpdateUser = null;
         this._gdmOrigMethodName = null;
         this._gdmOrigUserWellYAlign = null;
+        this._userListItemAddedId = null;
     }
 
     enable() {
@@ -172,6 +173,9 @@ export class GdmManager {
         this._connectAllocation(dialog._userSelectionBox, () => this._positionUserList());
         this._positionUserList();
 
+        // 3a. Tighten user list button widths to max natural content width
+        this._setupUserListWidths();
+
         // 3. Distro logo opacity override
         if (dialog._logoBin) {
             dialog._logoBin.opacity = 0;
@@ -250,6 +254,8 @@ export class GdmManager {
             dialog.disconnect(this._opacityId);
             this._opacityId = null;
         }
+
+        this._teardownUserListWidths();
 
         for (const { actor, id } of this._allocationHandlers)
             actor.disconnect(id);
@@ -371,6 +377,77 @@ export class GdmManager {
         const [, , natW, natH] = box.get_preferred_size();
         box.translation_x = Math.floor(w / 2 - natW / 2) - (box.x || 0);
         box.translation_y = Math.floor(h * GDM_USER_STACK_VERTICAL_FRACTION - natH / 2) - (box.y || 0);
+    }
+
+    // ── User list width tightening ──────────────────────────────────────────
+
+    _getItemTightWidth(item) {
+        // UserWidgetLabel uses BinLayout so it reports max(real_name, username)
+        // as its natural width even when only the real name is visible.
+        // We measure the real name label directly to get the actual display width.
+        const userWidget = item._userWidget;
+        if (!userWidget) return item.get_preferred_width(-1)[1];
+
+        const avatar = userWidget._avatar;
+        const labelWidget = userWidget._label;
+        if (!avatar || !labelWidget) return item.get_preferred_width(-1)[1];
+
+        const [, avatarNatW] = avatar.get_preferred_width(-1);
+        const visibleLabel = labelWidget._realNameLabel ?? labelWidget._userNameLabel;
+        const [, labelNatW] = visibleLabel ? visibleLabel.get_preferred_width(-1) : [0, 0];
+
+        // Spacing between avatar and label from CSS 'spacing' on .user-widget
+        const spacing = userWidget.get_theme_node().get_length('spacing');
+
+        // Button's own horizontal padding
+        const itemNode = item.get_theme_node();
+        const padLeft = itemNode.get_padding(St.Side.LEFT);
+        const padRight = itemNode.get_padding(St.Side.RIGHT);
+
+        return Math.ceil(padLeft + avatarNatW + spacing + labelNatW + padRight);
+    }
+
+    _applyUserListWidths() {
+        const userList = this._dialog?._userList;
+        if (!userList || userList._items.size === 0) return;
+
+        let maxW = 0;
+        for (const item of userList._items.values()) {
+            const w = this._getItemTightWidth(item);
+            if (w > maxW) maxW = w;
+        }
+
+        for (const item of userList._items.values()) {
+            item.x_expand = false;
+            item.set_width(maxW);
+        }
+    }
+
+    _setupUserListWidths() {
+        const userList = this._dialog?._userList;
+        if (!userList) return;
+
+        this._applyUserListWidths();
+
+        // Re-apply whenever a new user is lazily added to the list
+        this._userListItemAddedId = userList.connect('item-added', () => {
+            this._applyUserListWidths();
+        });
+    }
+
+    _teardownUserListWidths() {
+        const userList = this._dialog?._userList;
+        if (this._userListItemAddedId && userList) {
+            userList.disconnect(this._userListItemAddedId);
+            this._userListItemAddedId = null;
+        }
+        // Restore items to natural x_expand and width
+        if (userList) {
+            for (const item of userList._items.values()) {
+                item.x_expand = true;
+                item.set_width(-1);
+            }
+        }
     }
 
     _positionAuthPrompt() {
