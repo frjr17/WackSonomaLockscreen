@@ -39,6 +39,9 @@ import {
     FADE_OUT_SCALE,
     DATE_LABEL_HEIGHT,
     TIME_LABEL_HEIGHT_FALLBACK,
+    CUPERTINO_UNLOCK_PANEL_FADE,
+    CUPERTINO_UNLOCK_TSO_DELAY,
+    CUPERTINO_UNLOCK_FADE_DURATION,
 } from './constants.js';
 
 export default class WackLockscreenClockExtension extends Extension {
@@ -116,10 +119,10 @@ export default class WackLockscreenClockExtension extends Extension {
         this._origFinish = dialog.finish.bind(dialog);
         dialog.finish = (onComplete) => {
             const isCupertino = this._lockscreenMode === 'cupertino';
-            if (isCupertino) {
+            if (isCupertino && this._cupertinoUnlockFade) {
                 const panel = Main.panel;
                 if (panel) {
-                    panel.ease({ opacity: 0, duration: 150, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
+                    panel.ease({ opacity: 0, duration: CUPERTINO_UNLOCK_PANEL_FADE, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
                 }
 
                 if (this._finishTimeoutId) {
@@ -127,11 +130,14 @@ export default class WackLockscreenClockExtension extends Extension {
                     this._finishTimeoutId = null;
                 }
 
-                this._finishTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                // Wait for the panel fade-out (CUPERTINO_UNLOCK_PANEL_FADE ms) to complete, then apply the
+                // session mode override so the panel gets its user-session appearance
+                // (dateMenu, theming, extensions) before it slides in.
+                this._finishTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, CUPERTINO_UNLOCK_TSO_DELAY, () => {
                     this._finishTimeoutId = null;
                     this._tempSessionModeOverride();
 
-                    const duration = 400;
+                    const duration = CUPERTINO_UNLOCK_FADE_DURATION;
                     const mode = Clutter.AnimationMode.EASE_OUT_QUAD;
 
                     if (panel) {
@@ -522,12 +528,18 @@ export default class WackLockscreenClockExtension extends Extension {
         };
         syncEscToSleep();
 
+        const syncCupertinoUnlockFade = () => {
+            this._cupertinoUnlockFade = this._settings.get_boolean('cupertino-unlock-fade');
+        };
+        syncCupertinoUnlockFade();
+
         this._settings.connectObject(
             'changed::clock-animation', syncClockAnimation,
             'changed::prompt-animation', syncPromptAnimation,
             'changed::lockscreen-mode', syncLockscreenMode,
             'changed::cupertino-always-show-user', syncCupertinoAlwaysShowUser,
             'changed::esc-to-sleep', syncEscToSleep,
+            'changed::cupertino-unlock-fade', syncCupertinoUnlockFade,
             this
         );
     }
@@ -1119,7 +1131,9 @@ export default class WackLockscreenClockExtension extends Extension {
         Main.sessionMode.panel = {
             left: ['activities'],
             center: ['dateMenu'],
-            right: ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'],};        Main.sessionMode.panelStyle = null;
+            right: ['screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings'],
+        };
+        Main.sessionMode.panelStyle = null;
         Main.sessionMode.emit('updated');
     }
 
@@ -1132,6 +1146,7 @@ export default class WackLockscreenClockExtension extends Extension {
         this._origSessionModeProps = null;
         Main.sessionMode.emit('updated');
     }
+
 
     _getUserThemeFile() {
         const shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
