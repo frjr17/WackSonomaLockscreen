@@ -606,9 +606,9 @@ export class GdmManager {
                 this._gdmClock.setClockFormat(metadata?.clockFormat ?? null);
 
             // Calculate and apply dynamic clock alpha based on the GDM background
-            let targetAlpha = 0.6;
+            let alphaPromise;
             if (metadata) {
-                targetAlpha = getWallpaperAlpha({
+                alphaPromise = getWallpaperAlpha({
                     uri: metadata.uri,
                     isColor: metadata.is_color,
                     primaryColor: metadata.primary_color,
@@ -626,7 +626,7 @@ export class GdmManager {
                     const shadingType = bgSettings.get_enum('color-shading-type');
                     const isColor = (style === 0);
 
-                    targetAlpha = getWallpaperAlpha({
+                    alphaPromise = getWallpaperAlpha({
                         uri,
                         isColor,
                         primaryColor,
@@ -636,11 +636,16 @@ export class GdmManager {
                     });
                 } catch (e) {
                     _log('[WACK/GdmManager] Failed to get default background settings for alpha: ' + e);
+                    alphaPromise = Promise.resolve(0.6);
                 }
             }
 
-            if (this._gdmClock)
-                this._gdmClock.setWallpaperAlpha(targetAlpha);
+            alphaPromise.then(alpha => {
+                if (this._gdmClock)
+                    this._gdmClock.setWallpaperAlpha(alpha);
+            }).catch(e => {
+                _log('[WACK/GdmManager] Failed to compute dynamic alpha: ' + e);
+            });
 
             if (this._appliedWallpaperUser === resolvedUserName) {
                 return;
