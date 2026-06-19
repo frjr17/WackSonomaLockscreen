@@ -11,6 +11,7 @@ import Meta from 'gi://Meta';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import { WackClock } from './wackClock.js';
 import { WackCupertinoRestPrompt } from './cupertinoPrompt.js';
+import { getWallpaperAlpha } from './alphaManager.js';
 import {
     GDM_USER_STACK_VERTICAL_FRACTION,
     GDM_DATETIME_TOP_FRACTION,
@@ -603,6 +604,43 @@ export class GdmManager {
             // carry it over via the shared metadata file written by the user session.
             if (this._gdmClock)
                 this._gdmClock.setClockFormat(metadata?.clockFormat ?? null);
+
+            // Calculate and apply dynamic clock alpha based on the GDM background
+            let targetAlpha = 0.6;
+            if (metadata) {
+                targetAlpha = getWallpaperAlpha({
+                    uri: metadata.uri,
+                    isColor: metadata.is_color,
+                    primaryColor: metadata.primary_color,
+                    secondaryColor: metadata.secondary_color,
+                    shadingType: metadata.shading_type,
+                    textLuminance: 1.0,
+                });
+            } else {
+                try {
+                    const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+                    const uri = bgSettings.get_string('picture-uri');
+                    const style = bgSettings.get_enum('picture-options');
+                    const primaryColor = bgSettings.get_string('primary-color');
+                    const secondaryColor = bgSettings.get_string('secondary-color');
+                    const shadingType = bgSettings.get_enum('color-shading-type');
+                    const isColor = (style === 0);
+
+                    targetAlpha = getWallpaperAlpha({
+                        uri,
+                        isColor,
+                        primaryColor,
+                        secondaryColor,
+                        shadingType,
+                        textLuminance: 1.0,
+                    });
+                } catch (e) {
+                    _log('[WACK/GdmManager] Failed to get default background settings for alpha: ' + e);
+                }
+            }
+
+            if (this._gdmClock)
+                this._gdmClock.setWallpaperAlpha(targetAlpha);
 
             if (this._appliedWallpaperUser === resolvedUserName) {
                 return;
