@@ -27,7 +27,8 @@ import { WackCupertinoRestPrompt } from './cupertinoPrompt.js';
 import { getWallpaperAlpha, clearCache, initCache } from './alphaManager.js';
 import { WackLayout } from './layoutManager.js';
 import { NotificationManager } from './notificationManager.js';
-
+import { GdmManager } from './gdm.js';
+import { CrossSessionManager } from './crossSessionManager.js';
 import {
     PROMPT_BLUR_RADIUS,
     PROMPT_BLUR_BRIGHTNESS,
@@ -45,6 +46,14 @@ import {
     CUPERTINO_UNLOCK_FADE_DURATION,
 } from './constants.js';
 
+function _log(msg) {
+    console.log(msg);
+}
+
+function _logError(msg) {
+    console.error(msg);
+}
+
 export default class WackLockscreenClockExtension extends Extension {
     // ── Single Source of Truth for Prompt State ───────────────────────────
     get _promptActive() {
@@ -52,9 +61,38 @@ export default class WackLockscreenClockExtension extends Extension {
     }
 
     enable() {
+        this._gdmManager = new GdmManager(this);
+        this._gdmManager.enable();
+
+        if (Main.sessionMode.currentMode !== 'gdm') {
+            const syncCrossSession = () => {
+                const wackShell = Main.extensionManager.lookup('wack-shell@rinzler69-wastaken.github.com');
+                const wackShellEnabled = wackShell && wackShell.state === 1;
+
+                if (wackShellEnabled) {
+                    if (this._crossSessionManager) {
+                        this._crossSessionManager.disable();
+                        this._crossSessionManager = null;
+                    }
+                } else {
+                    if (!this._crossSessionManager) {
+                        this._crossSessionManager = new CrossSessionManager();
+                        this._crossSessionManager.enable();
+                    }
+                }
+            };
+
+            syncCrossSession();
+
+            this._wackShellStateChangedId = Main.extensionManager.connect('extension-state-changed', (_obj, ext) => {
+                if (ext.uuid === 'wack-shell@rinzler69-wastaken.github.com') {
+                    syncCrossSession();
+                }
+            });
+        }
 
         const dialog = Main.screenShield._dialog;
-        console.log(`[WACK] enable() called, dialog=${!!dialog}`);
+        _log(`[WACK] enable() called, dialog=${!!dialog}`);
         if (!dialog) return;
 
         this._origStylesheet = undefined;
@@ -123,6 +161,16 @@ export default class WackLockscreenClockExtension extends Extension {
         dialog.finish = (onComplete) => {
             const isCupertino = this._lockscreenMode === 'cupertino';
             if (isCupertino && this._cupertinoUnlockFade) {
+                // Snapshot the cache reference *now*, before _tempSessionModeOverride()
+                // flips Main.sessionMode.hasWindows and emits 'updated' below. wack-shell's
+                // _syncSessionModeUI() listens for that same signal and clears
+                // global.wack_window_snapshots as soon as hasWindows goes true, which would
+                // otherwise race ahead of the fade-in code further down in this callback.
+                const capturedSnapshots = global.wack_window_snapshots
+                    ? global.wack_window_snapshots.slice()
+                    : [];
+                log(`[WACK Lockscreen] finish(): captured ${capturedSnapshots.length} snapshot(s) before session-mode override`);
+
                 const panel = Main.panel;
                 if (panel) {
                     panel.ease({ opacity: 0, duration: CUPERTINO_UNLOCK_PANEL_FADE, mode: Clutter.AnimationMode.EASE_OUT_QUAD });
@@ -151,6 +199,51 @@ export default class WackLockscreenClockExtension extends Extension {
                         panel.ease({ translation_y: 0, duration, mode });
                     }
 
+                    // Check if we have cached window snapshots and fade them in
+                    log(`[WACK Lockscreen] fade-in callback: ${capturedSnapshots.length} snapshot(s) available to crossfade`);
+                    if (capturedSnapshots.length > 0) {
+                        this._windowFadeContainer = new Clutter.Actor();
+                        lockDialogGroup.add_child(this._windowFadeContainer);
+                        // Place directly above `dialog` (which owns the opaque wallpaper/
+                        // _backgroundGroup) so the window textures are actually visible,
+                        // instead of set_child_below_sibling(..., null) which sank this
+                        // below the wallpaper entirely. The clock/hint/panel — which fade
+                        // to opacity 0 below — stay above this container, so as they fade
+                        // out the window textures are revealed underneath.
+                        lockDialogGroup.set_child_above_sibling(this._windowFadeContainer, this._dialog);
+
+                        capturedSnapshots.forEach(snapshot => {
+                            const actor = new Clutter.Actor({
+                                content: snapshot.content,
+                                x: snapshot.rect.x,
+                                y: snapshot.rect.y,
+                                width: snapshot.rect.width,
+                                height: snapshot.rect.height
+                            });
+                            actor.set_pivot_point(0.5, 0.5);
+                            actor.scale_x = 0.94;
+                            actor.scale_y = 0.94;
+                            // add_child first so actor is realized on stage,
+                            // then ease — Clutter requires the actor to be staged
+                            // before a transition can actually run.
+                            this._windowFadeContainer.add_child(actor);
+                            actor.ease({
+                                scale_x: 1.0,
+                                scale_y: 1.0,
+                                duration,
+                                mode,
+                            });
+                        });
+
+                        // Container handles the unified opacity fade only
+                        this._windowFadeContainer.opacity = 0;
+                        this._windowFadeContainer.ease({
+                            opacity: 255,
+                            duration,
+                            mode,
+                        });
+                    }
+
                     const actorsToFade = [this._clockWrapper, this._hintContainer, this._mainBox].filter(a => a != null);
                     actorsToFade.forEach(actor => {
                         actor.ease({ opacity: 0, duration, mode });
@@ -168,6 +261,11 @@ export default class WackLockscreenClockExtension extends Extension {
                             if (called) return;
                             called = true;
                             this._restoreSessionMode();
+                            if (this._windowFadeContainer) {
+                                this._windowFadeContainer.destroy();
+                                this._windowFadeContainer = null;
+                            }
+                            global.wack_window_snapshots = [];
                             onComplete();
                         };
 
@@ -863,7 +961,7 @@ export default class WackLockscreenClockExtension extends Extension {
         try {
             Gdm.goto_login_session_sync(null);
         } catch (e) {
-            console.error(`WACK lockscreen: failed to switch user: ${e.message}`);
+            _logError(`WACK lockscreen: failed to switch user: ${e.message}`);
         }
     }
 
@@ -1238,22 +1336,35 @@ export default class WackLockscreenClockExtension extends Extension {
         return null;
     }
 
-
-
+    // Guideline EGO-M-008: Documenting use of unlock-dialog.
+    // This extension runs in the 'unlock-dialog' session mode to customize the
+    // GNOME Shell lock screen. We perform the following modifications:
+    // - Replace the default clock widget (dialog._clock) with our custom clock
+    //   wrapper to display a macOS Sonoma-style clock layout.
+    // - Override dialog._updateBackgroundEffects to customize background blur.
+    // - Override dialog._updateUserSwitchVisibility to hide/show user options.
+    // - Intercept dialog.finish to animate custom transitions when unlocking.
+    //
+    // In this disable() method, we cleanly revert all changes, restore all overridden
+    // methods/injections to their original implementations, and destroy/nullify all
+    // custom UI elements, ensuring no resource leaks or state contamination in the
+    // GNOME Shell session.
     disable() {
-        // Guideline EGO-M-008: Documenting use of unlock-dialog.
-        // This extension runs in the 'unlock-dialog' session mode to customize the
-        // GNOME Shell lock screen. We perform the following modifications:
-        // - Replace the default clock widget (dialog._clock) with our custom clock
-        //   wrapper to display a macOS Sonoma-style clock layout.
-        // - Override dialog._updateBackgroundEffects to customize background blur.
-        // - Override dialog._updateUserSwitchVisibility to hide/show user options.
-        // - Intercept dialog.finish to animate custom transitions when unlocking.
-        //
-        // In this disable() method, we cleanly revert all changes, restore all overridden
-        // methods/injections to their original implementations, and destroy/nullify all
-        // custom UI elements, ensuring no resource leaks or state contamination in the
-        // GNOME Shell session.
+        if (this._gdmManager) {
+            this._gdmManager.disable();
+            this._gdmManager = null;
+        }
+
+        if (this._wackShellStateChangedId) {
+            Main.extensionManager.disconnect(this._wackShellStateChangedId);
+            this._wackShellStateChangedId = null;
+        }
+
+        if (this._crossSessionManager) {
+            this._crossSessionManager.disable();
+            this._crossSessionManager = null;
+        }
+
         if (this._bgSettings) {
             this._bgSettings.disconnectObject(this);
             this._bgSettings = null;
@@ -1289,9 +1400,12 @@ export default class WackLockscreenClockExtension extends Extension {
             this._finishTimeoutId = null;
         }
 
+        if (this._windowFadeContainer) {
+            this._windowFadeContainer.destroy();
+            this._windowFadeContainer = null;
+        }
+
         if (this._origSessionModeProps) {
-            Main.sessionMode.hasWindows = this._origSessionModeProps.hasWindows;
-            Main.sessionMode.hasWorkspaces = this._origSessionModeProps.hasWorkspaces;
             Main.sessionMode.panel = this._origSessionModeProps.panel;
             Main.sessionMode.panelStyle = this._origSessionModeProps.panelStyle;
             this._origSessionModeProps = null;
