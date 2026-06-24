@@ -657,9 +657,17 @@ export default class WackLockscreenClockExtension extends Extension {
         syncEscToSleep();
 
         const syncCupertinoUnlockFade = () => {
-            this._cupertinoUnlockFade = this._settings.get_boolean('cupertino-unlock-fade');
+            const wackShell = Main.extensionManager.lookup('wack-shell@rinzler69-wastaken.github.com');
+            const wackShellEnabled = wackShell && wackShell.state === 1;
+            this._cupertinoUnlockFade = wackShellEnabled && this._settings.get_boolean('cupertino-unlock-fade');
         };
         syncCupertinoUnlockFade();
+
+        this._wackShellStateChangedId = Main.extensionManager.connect('extension-state-changed', (_obj, ext) => {
+            if (ext.uuid === 'wack-shell@rinzler69-wastaken.github.com') {
+                syncCupertinoUnlockFade();
+            }
+        });
 
         this._settings.connectObject(
             'changed::clock-animation', syncClockAnimation,
