@@ -647,7 +647,8 @@ export default class WackLockscreenClockExtension extends Extension {
         const wackShellEnabled = wackShell && wackShell.state === 1;
         const isPowerSaver = this._powerProfilesProxy?.ActiveProfile === 'power-saver';
 
-        this._cupertinoUnlockFade = wackShellEnabled &&
+        this._cupertinoUnlockFade = this._settings.get_string('lockscreen-mode') === 'cupertino' &&
+            wackShellEnabled &&
             this._settings.get_boolean('cupertino-unlock-fade') &&
             !isPowerSaver;
     }
