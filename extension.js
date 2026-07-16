@@ -851,12 +851,13 @@ export default class WackLockscreenClockExtension extends Extension {
 
     // ── Side Effects Only: State is derived via getter ────────────────────
     _onPromptShow() {
+        this._setupAuthPromptOverride();
+
         const isCupertino = this._lockscreenMode === 'cupertino';
         if (isCupertino) {
             this._promptActor?.remove_style_class_name('wack-cupertino-rest');
             this._promptActor?.add_style_class_name('wack-cupertino-prompt');
             this._cupertinoToPrompt = true;
-            this._setupCupertinoAvatarOverride();
         }
     }
 
@@ -996,50 +997,71 @@ export default class WackLockscreenClockExtension extends Extension {
         this._updateCupertinoHintCycle();
     }
 
-    _setupCupertinoAvatarOverride() {
-        if (this._cupertinoAvatarSetup) return;
+    _setupAuthPromptOverride() {
+        if (this._authPromptOverrideSetup) return;
         const authPrompt = this._dialog?._authPrompt ?? this._dialog?._promptBox?._authPrompt;
         if (!authPrompt) return;
-        this._cupertinoAvatarSetup = true;
+        this._authPromptOverrideSetup = true;
 
-        if (!this._cupertinoOrigUpdateUser) {
+        if (!this._authPromptOrigUpdateUser) {
             const methodName = authPrompt.setUser ? 'setUser' : 'updateUser';
-            this._cupertinoOrigMethodName = methodName;
-            this._cupertinoOrigUpdateUser = authPrompt[methodName].bind(authPrompt);
+            this._authPromptOrigMethodName = methodName;
+            this._authPromptOrigUpdateUser = authPrompt[methodName];
             authPrompt[methodName] = (user) => {
-                this._cupertinoOrigUpdateUser(user);
+                const currentUser = authPrompt._userWell?.get_child()?._user;
+                // GNOME clears the visual user before the prompt fade starts.
+                // Keep the populated widget alive until the prompt is destroyed.
+                if (this._authPromptCancelling && user === null && currentUser)
+                    return;
+
+                this._authPromptOrigUpdateUser.call(authPrompt, user);
                 const uw = authPrompt._userWell?.get_child();
-                if (uw && uw._avatar) {
+                if (this._lockscreenMode === 'cupertino' && uw?._avatar) {
                     uw._avatar.visible = true;
                     uw._avatar.opacity = 0;
                 }
             };
+
+            this._authPromptOrigCancel = authPrompt.cancel;
+            authPrompt.cancel = (...args) => {
+                this._authPromptCancelling = true;
+                try {
+                    return this._authPromptOrigCancel.apply(authPrompt, args);
+                } finally {
+                    this._authPromptCancelling = false;
+                }
+            };
+
             const promptUserWidget = authPrompt._userWell?.get_child();
-            if (promptUserWidget?._avatar) {
+            if (this._lockscreenMode === 'cupertino' && promptUserWidget?._avatar) {
                 promptUserWidget._avatar.visible = true;
                 promptUserWidget._avatar.opacity = 0;
             }
         }
 
-        authPrompt.connectObject('destroy', () => this._teardownCupertinoAvatarOverride(), this);
+        authPrompt.connectObject('destroy', () => this._teardownAuthPromptOverride(), this);
     }
 
-    _teardownCupertinoAvatarOverride() {
+    _teardownAuthPromptOverride() {
         const authPrompt = this._dialog?._authPrompt ?? this._dialog?._promptBox?._authPrompt;
         if (authPrompt) authPrompt.disconnectObject(this);
 
-        if (authPrompt && this._cupertinoOrigUpdateUser && this._cupertinoOrigMethodName) {
-            authPrompt[this._cupertinoOrigMethodName] = this._cupertinoOrigUpdateUser;
-        }
-        this._cupertinoOrigUpdateUser = null;
-        this._cupertinoOrigMethodName = null;
+        if (authPrompt && this._authPromptOrigUpdateUser && this._authPromptOrigMethodName)
+            authPrompt[this._authPromptOrigMethodName] = this._authPromptOrigUpdateUser;
+        if (authPrompt && this._authPromptOrigCancel)
+            authPrompt.cancel = this._authPromptOrigCancel;
+
+        this._authPromptOrigUpdateUser = null;
+        this._authPromptOrigMethodName = null;
+        this._authPromptOrigCancel = null;
+        this._authPromptCancelling = false;
 
         const promptUserWidget = authPrompt?._userWell?.get_child();
         if (promptUserWidget?._avatar) {
             promptUserWidget._avatar.visible = true;
             promptUserWidget._avatar.opacity = 255;
         }
-        this._cupertinoAvatarSetup = false;
+        this._authPromptOverrideSetup = false;
     }
 
     _applyPromptModeLayout() {
@@ -1568,7 +1590,7 @@ export default class WackLockscreenClockExtension extends Extension {
             this._inhibitHintTimeoutId = null;
         }
 
-        this._teardownCupertinoAvatarOverride();
+        this._teardownAuthPromptOverride();
         if (this._cupertinoHintCycleId) {
             GLib.source_remove(this._cupertinoHintCycleId);
             this._cupertinoHintCycleId = null;
