@@ -1063,27 +1063,22 @@ _syncLockscreenMessageLayout() {
                     });
                 }
             } else {
-                try {
-                    const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
-                    const uri = bgSettings.get_string('picture-uri');
-                    const style = bgSettings.get_enum('picture-options');
-                    const primaryColor = bgSettings.get_string('primary-color');
-                    const secondaryColor = bgSettings.get_string('secondary-color');
-                    const shadingType = bgSettings.get_enum('color-shading-type');
-                    const isColor = (style === 0);
+                const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+                const uri = bgSettings.get_string('picture-uri');
+                const style = bgSettings.get_enum('picture-options');
+                const primaryColor = bgSettings.get_string('primary-color');
+                const secondaryColor = bgSettings.get_string('secondary-color');
+                const shadingType = bgSettings.get_enum('color-shading-type');
+                const isColor = (style === 0);
 
-                    alphaPromise = getWallpaperAlpha({
-                        uri,
-                        isColor,
-                        primaryColor,
-                        secondaryColor,
-                        shadingType,
-                        textLuminance: 1.0,
-                    });
-                } catch (e) {
-                    _log('[WACK/GdmManager] Failed to get default background settings for alpha: ' + e);
-                    alphaPromise = Promise.resolve(0.6);
-                }
+                alphaPromise = getWallpaperAlpha({
+                    uri,
+                    isColor,
+                    primaryColor,
+                    secondaryColor,
+                    shadingType,
+                    textLuminance: 1.0,
+                });
             }
 
             alphaPromise.then(alpha => {
@@ -1491,12 +1486,8 @@ _syncLockscreenMessageLayout() {
         if (effectiveMetadata && typeof effectiveMetadata.promptVibrancy === 'boolean') {
             promptVibrancy = effectiveMetadata.promptVibrancy;
         } else {
-            try {
-                const settings = this._extension.getSettings();
-                promptVibrancy = settings.get_boolean('prompt-vibrancy');
-            } catch (e) {
-                _log('[WACK/GdmManager] Failed to read prompt-vibrancy from settings: ' + e);
-            }
+            const settings = this._extension.getSettings();
+            promptVibrancy = settings.get_boolean('prompt-vibrancy');
         }
 
         if (!promptVibrancy) {
@@ -1544,22 +1535,18 @@ _syncLockscreenMessageLayout() {
                 yCenterFraction: yCenterFraction,
             };
         } else {
-            try {
-                const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
-                const uri = bgSettings.get_string('picture-uri');
-                const style = bgSettings.get_enum('picture-options');
-                wallpaperParams = {
-                    uri,
-                    isColor: style === 0,
-                    primaryColor: bgSettings.get_string('primary-color'),
-                    secondaryColor: bgSettings.get_string('secondary-color'),
-                    shadingType: bgSettings.get_enum('color-shading-type'),
-                    wellH: wellH,
-                    yCenterFraction: yCenterFraction,
-                };
-            } catch (e) {
-                _log('[WACK/GdmManager] Failed to get background settings for prompt color: ' + e);
-            }
+            const bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+            const uri = bgSettings.get_string('picture-uri');
+            const style = bgSettings.get_enum('picture-options');
+            wallpaperParams = {
+                uri,
+                isColor: style === 0,
+                primaryColor: bgSettings.get_string('primary-color'),
+                secondaryColor: bgSettings.get_string('secondary-color'),
+                shadingType: bgSettings.get_enum('color-shading-type'),
+                wellH: wellH,
+                yCenterFraction: yCenterFraction,
+            };
         }
 
         if (!wallpaperParams)

@@ -7,28 +7,18 @@ import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/
 import { CLOCK_ANIMATION_OPTIONS, PROMPT_ANIMATION_OPTIONS } from './anims.js';
 
 function _isWackShellInstalled() {
-    try {
-        const userPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'wack-shell@rinzler69-wastaken.github.com']);
-        const sysPath1 = '/usr/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
-        const sysPath2 = '/usr/local/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
-        return Gio.File.new_for_path(userPath).query_exists(null) ||
-            Gio.File.new_for_path(sysPath1).query_exists(null) ||
-            Gio.File.new_for_path(sysPath2).query_exists(null);
+    const userPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'wack-shell@rinzler69-wastaken.github.com']);
+    const sysPath1 = '/usr/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
+    const sysPath2 = '/usr/local/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
+    return Gio.File.new_for_path(userPath).query_exists(null) ||
         Gio.File.new_for_path(sysPath1).query_exists(null) ||
-            Gio.File.new_for_path(sysPath2).query_exists(null);
-    } catch (e) {
-        return false;
-    }
+        Gio.File.new_for_path(sysPath2).query_exists(null);
 }
 
 function _isWackShellEnabled() {
-    try {
-        const shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
-        const enabled = shellSettings.get_strv('enabled-extensions');
-        return enabled.includes('wack-shell@rinzler69-wastaken.github.com');
-    } catch (e) {
-        return false;
-    }
+    const shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
+    const enabled = shellSettings.get_strv('enabled-extensions');
+    return enabled.includes('wack-shell@rinzler69-wastaken.github.com');
 }
 
 // <GDM_EXCLUDE>
@@ -932,11 +922,7 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
                 valign: Gtk.Align.CENTER,
             });
             linkBtn.connect('clicked', () => {
-                try {
-                    Gio.AppInfo.launch_default_for_uri('https://github.com/rinzler69-wastaken/wack-shell', null);
-                } catch (e) {
-                    // Ignore or fallback
-                }
+                Gtk.show_uri(window, 'https://github.com/rinzler69-wastaken/wack-shell', GLib.CURRENT_TIME);
             });
 
             installShellRow.add_suffix(copyBtn);
