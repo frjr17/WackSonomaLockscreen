@@ -128,8 +128,8 @@ for file in "pro.js" "crossSessionManager.js" "extension.js" "prefs.js"; do
     fi
 done
 
-# 3. Patch metadata.json to include 'gdm' in session-modes
-echo "-> Adding 'gdm' session-mode in metadata.json..."
+# 3. Patch metadata.json to include 'gdm' in session-modes and 'PRO' in version-name
+echo "-> Adding 'gdm' session-mode and 'PRO' version tag in metadata.json..."
 python3 -c "
 import json, sys
 metadata_path = '$TARGET_DIR/metadata.json'
@@ -137,14 +137,21 @@ try:
     with open(metadata_path, 'r') as f:
         data = json.load(f)
     modes = data.get('session-modes', [])
+    updated = False
     if 'gdm' not in modes:
         modes.append('gdm')
         data['session-modes'] = modes
+        updated = True
+    vname = str(data.get('version-name', ''))
+    if vname and 'PRO' not in vname:
+        data['version-name'] = f'{vname} PRO'
+        updated = True
+    if updated:
         with open(metadata_path, 'w') as f:
             json.dump(data, f, indent=2)
-        print('Successfully added GDM mode.')
+        print('Successfully updated metadata.json for PRO/GDM.')
     else:
-        print('GDM mode already present.')
+        print('metadata.json already up to date.')
 except Exception as e:
     print(f'Error patching metadata.json: {e}', file=sys.stderr)
     sys.exit(1)

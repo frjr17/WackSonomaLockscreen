@@ -69,7 +69,7 @@ for file in "extension.js" "prefs.js"; do
     fi
 done
 
-# Remove 'gdm' from user-level metadata.json session-modes
+# Remove 'gdm' and 'PRO' version tag from user-level metadata.json
 if [ -f "$USER_DIR/metadata.json" ]; then
     python3 -c "
 import json
@@ -78,9 +78,16 @@ try:
     with open(metadata_path, 'r') as f:
         data = json.load(f)
     modes = data.get('session-modes', [])
+    updated = False
     if 'gdm' in modes:
         modes.remove('gdm')
         data['session-modes'] = modes
+        updated = True
+    vname = str(data.get('version-name', ''))
+    if 'PRO' in vname:
+        data['version-name'] = vname.replace(' PRO', '').replace('PRO', '').strip()
+        updated = True
+    if updated:
         with open(metadata_path, 'w') as f:
             json.dump(data, f, indent=2)
 except Exception:

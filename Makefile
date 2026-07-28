@@ -30,7 +30,7 @@ pack: compile-po ## Create a ZIP package for Extensions.gnome.org
 	@cp stylesheet.css stylesheet.css.bak
 	@sed -i -e "s|font-family: 'SF Pro Display';|/* font-family: 'SF Pro Display'; */|g" -e "s|font-family: '\.SF Soft Numeric';|/* font-family: '.SF Soft Numeric'; */|g" stylesheet.css
 	@cp metadata.json metadata.json.bak
-	@python3 -c "import json; d=json.load(open('metadata.json')); d['session-modes'] = [m for m in d.get('session-modes', []) if m != 'gdm']; json.dump(d, open('metadata.json','w'), indent=2)"
+	@python3 -c "import json; d=json.load(open('metadata.json')); d['session-modes'] = [m for m in d.get('session-modes', []) if m != 'gdm']; d['version-name'] = str(d.get('version-name', '')).replace(' PRO', '').replace('PRO', '').strip(); json.dump(d, open('metadata.json','w'), indent=2)"
 	@cp prefs.js prefs.js.bak
 	@python3 -c "import re; c=open('prefs.js').read(); c=re.sub(r'//\s*<GDM_EXCLUDE>.*?//\s*</GDM_EXCLUDE>', '', c, flags=re.DOTALL); open('prefs.js','w').write(c)"
 	@cp extension.js extension.js.bak
