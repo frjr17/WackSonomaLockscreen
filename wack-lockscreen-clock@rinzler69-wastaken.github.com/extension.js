@@ -119,20 +119,8 @@ export default class WackLockscreenClockExtension extends Extension {
 
         this._isActive = true;
         this._gdmManager = null;
-        // <GDM_EXCLUDE>
-        if (Main.sessionMode.currentMode === 'gdm') {
-            import('./pro.js').then(module => {
-                if (!this._isActive) return;
-                this._gdmManager = new module.GdmManager(this);
-                this._gdmManager.enable();
-            }).catch(err => {
-                _logError(`[WACK/GDM] Failed to dynamically load GDM DLC: ${err.message}`);
-            });
-        }
-        // </GDM_EXCLUDE>
-        // <GDM_EXCLUDE>
-        this._syncCrossSessionManager();
-        // </GDM_EXCLUDE>
+        
+        
 
         const dialog = Main.screenShield._dialog;
         _log(`[WACK] enable() called, dialog=${!!dialog}`);
@@ -854,14 +842,10 @@ export default class WackLockscreenClockExtension extends Extension {
         const dialog = this._dialog;
         if (!dialog) return;
 
-        const authPrompt = dialog._authPrompt ?? dialog._promptBox?._authPrompt;
-        const entry = this._findPromptEntry(authPrompt);
-        if (entry && entry.clutter_text) {
-            entry.clutter_text.cursor_visible = true;
+        if (this._cursorBlinkTimeoutId) {
+            GLib.source_remove(this._cursorBlinkTimeoutId);
+            this._cursorBlinkTimeoutId = null;
         }
-
-        if (this._cursorBlink === false)
-            return;
 
         let visible = true;
         this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -871,23 +855,23 @@ export default class WackLockscreenClockExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             }
 
-            const currentAuthPrompt = currentDialog._authPrompt ?? currentDialog._promptBox?._authPrompt;
-            if (!currentAuthPrompt) {
+            const authPrompt = currentDialog._authPrompt;
+            if (!authPrompt) {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            const currentEntry = this._findPromptEntry(currentAuthPrompt);
-            if (!currentEntry || !currentEntry.clutter_text) {
+            const entry = this._findPromptEntry(authPrompt);
+            if (!entry || !entry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            if (!currentEntry.clutter_text.has_key_focus()) {
-                currentEntry.clutter_text.cursor_visible = false;
+            if (!entry.clutter_text.has_key_focus()) {
+                entry.clutter_text.cursor_visible = false;
                 return GLib.SOURCE_CONTINUE;
             }
 
             visible = !visible;
-            currentEntry.clutter_text.cursor_visible = visible;
+            entry.clutter_text.cursor_visible = visible;
             return GLib.SOURCE_CONTINUE;
         });
     }
@@ -973,28 +957,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
 
 
-    // <GDM_EXCLUDE>
-    _syncCrossSessionManager() {
-        if (Main.sessionMode.currentMode === 'gdm') {
-            if (this._crossSessionManager) {
-                this._crossSessionManager.disable();
-                this._crossSessionManager = null;
-            }
-            return;
-        }
-
-        if (!this._crossSessionManager) {
-            import('./crossSessionManager.js').then(module => {
-                if (!this._isActive) return;
-                if (this._crossSessionManager) return;
-                this._crossSessionManager = new module.CrossSessionManager();
-                this._crossSessionManager.enable();
-            }).catch(err => {
-                _logError(`[WACK/GDM] Failed to dynamically load CrossSessionManager: ${err.message}`);
-            });
-        }
-    }
-    // </GDM_EXCLUDE>
+    
 
     _syncCupertinoUnlockFade() {
         if (!this._settings)
@@ -1087,16 +1050,6 @@ export default class WackLockscreenClockExtension extends Extension {
         };
         syncPromptVibrancy();
 
-        const syncCursorBlink = () => {
-            this._cursorBlink = this._settings.get_boolean('cursor-blink') ?? true;
-            if (this._promptActive) {
-                this._startCursorBlink();
-            } else {
-                this._stopCursorBlink();
-            }
-        };
-        syncCursorBlink();
-
         this._wackShellStateChangedId = Main.extensionManager.connect('extension-state-changed', (_obj, ext) => {
             if (ext.uuid === 'wack-shell@rinzler69-wastaken.github.com') {
                 syncCupertinoUnlockFade();
@@ -1112,7 +1065,6 @@ export default class WackLockscreenClockExtension extends Extension {
             'changed::cupertino-unlock-fade', syncCupertinoUnlockFade,
             'changed::cupertino-crossfade-speed', syncCrossfadeSpeed,
             'changed::prompt-vibrancy', syncPromptVibrancy,
-            'changed::cursor-blink', syncCursorBlink,
             'changed::cupertino-lockscreen-message-enable', () => this._updateLockscreenMessage(),
             'changed::cupertino-lockscreen-message-text', () => this._updateLockscreenMessage(),
             this

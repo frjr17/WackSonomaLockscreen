@@ -73,12 +73,6 @@
       <description>Applies dynamic color to the password field based on wallpaper colors.</description>
     </key>
 
-    <key name="cursor-blink" type="b">
-      <default>true</default>
-      <summary>Cursor Blinking</summary>
-      <description>Enable or disable text cursor blinking in the password entry field.</description>
-    </key>
-
     <key name="cupertino-lockscreen-message-enable" type="b">
       <default>false</default>
       <summary>Enable Lockscreen Message</summary>
