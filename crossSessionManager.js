@@ -8,10 +8,10 @@ function _log(msg) {
 }
 
 export class CrossSessionManager {
-    constructor() {
+    constructor(extensionSettings) {
         this._bgSettings = null;
         this._interfaceSettings = null;
-        this._settings = null;
+        this._settings = extensionSettings;
         this._clockAlpha = null;
         this._promptColor = null;
         this._wallpaperFileMonitor = null;
@@ -25,7 +25,10 @@ export class CrossSessionManager {
             if (!c1 || !c2) return false;
             return c1.r === c2.r && c1.g === c2.g && c1.b === c2.b;
         };
-        if (this._clockAlpha === alpha && isColorMatch(this._promptColor, promptColor))
+        const userName = GLib.get_user_name();
+        const metaFile = Gio.File.new_for_path(`/var/tmp/wack-shared-wallpaper-${userName}.json`);
+
+        if (this._clockAlpha === alpha && isColorMatch(this._promptColor, promptColor) && metaFile.query_exists(null))
             return;
         this._clockAlpha = alpha;
         this._promptColor = promptColor;
@@ -37,7 +40,6 @@ export class CrossSessionManager {
         if (this._bgSettings)
             return; // already enabled
 
-        this._settings = new Gio.Settings({ schema_id: 'org.gnome.shell.extensions.wack-lockscreen-clock' });
         this._bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
         this._interfaceSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.interface' });
 
@@ -68,7 +70,6 @@ export class CrossSessionManager {
     disable() {
         if (this._settings) {
             this._settings.disconnectObject(this);
-            this._settings = null;
         }
         if (this._bgSettings) {
             this._bgSettings.disconnectObject(this);
@@ -316,7 +317,7 @@ export class CrossSessionManager {
             );
             metaFile.set_attribute_uint32('unix::mode', 0o644, Gio.FileQueryInfoFlags.NONE, null);
         } catch (e) {
-            _log('[WACK/CrossSession] Failed to save wallpaper: ' + e);
+            console.error('[WACK/CrossSession] Failed to save wallpaper: ' + e);
         }
     }
 

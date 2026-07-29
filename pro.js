@@ -921,6 +921,7 @@ _syncLockscreenMessageLayout() {
             is_color: metadata?.is_color ?? null,
             clockAlpha: metadata?.clockAlpha ?? null,
             promptColor: metadata?.promptColor ?? null,
+            cursorBlink: metadata?.cursorBlink ?? null,
             lockscreenMessageEnable: metadata?.lockscreenMessageEnable ?? null,
             lockscreenMessageText: metadata?.lockscreenMessageText ?? null,
         });
@@ -1317,18 +1318,16 @@ _syncLockscreenMessageLayout() {
         if (!authPrompt) return;
 
         const entry = this._findPromptEntry(authPrompt);
-        if (entry && entry.clutter_text) {
-            entry.clutter_text.cursor_blink = false;
-            entry.clutter_text.cursor_visible = true;
+        let cursorBlink = true;
+        if (this._currentWallpaperMetadata && typeof this._currentWallpaperMetadata.cursorBlink === 'boolean') {
+            cursorBlink = this._currentWallpaperMetadata.cursorBlink;
+        } else if (this._extension && typeof this._extension.getSettings === 'function') {
+            cursorBlink = this._extension.getSettings().get_boolean('cursor-blink');
         }
 
-        let cursorBlink = this._currentWallpaperMetadata?.cursorBlink;
-        if (cursorBlink === undefined) {
-            try {
-                cursorBlink = this._extension?.getSettings?.()?.get_boolean('cursor-blink') ?? true;
-            } catch (e) {
-                cursorBlink = true;
-            }
+        if (entry && entry.clutter_text) {
+            entry.clutter_text.cursor_blink = cursorBlink;
+            entry.clutter_text.cursor_visible = true;
         }
 
         if (cursorBlink === false)
@@ -1346,8 +1345,6 @@ _syncLockscreenMessageLayout() {
             if (!currentEntry || !currentEntry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
-
-            currentEntry.clutter_text.cursor_blink = false;
 
             if (!currentEntry.clutter_text.has_key_focus()) {
                 currentEntry.clutter_text.cursor_visible = false;

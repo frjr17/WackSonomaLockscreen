@@ -857,7 +857,7 @@ export default class WackLockscreenClockExtension extends Extension {
         const authPrompt = dialog._authPrompt ?? dialog._promptBox?._authPrompt;
         const entry = this._findPromptEntry(authPrompt);
         if (entry && entry.clutter_text) {
-            entry.clutter_text.cursor_blink = false;
+            entry.clutter_text.cursor_blink = (this._cursorBlink !== false);
             entry.clutter_text.cursor_visible = true;
         }
 
@@ -881,8 +881,6 @@ export default class WackLockscreenClockExtension extends Extension {
             if (!currentEntry || !currentEntry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
-
-            currentEntry.clutter_text.cursor_blink = false;
 
             if (!currentEntry.clutter_text.has_key_focus()) {
                 currentEntry.clutter_text.cursor_visible = false;
@@ -990,7 +988,7 @@ export default class WackLockscreenClockExtension extends Extension {
             import('./crossSessionManager.js').then(module => {
                 if (!this._isActive) return;
                 if (this._crossSessionManager) return;
-                this._crossSessionManager = new module.CrossSessionManager();
+                this._crossSessionManager = new module.CrossSessionManager(this.getSettings());
                 this._crossSessionManager.enable();
             }).catch(err => {
                 _logError(`[WACK/GDM] Failed to dynamically load CrossSessionManager: ${err.message}`);
@@ -1092,9 +1090,6 @@ export default class WackLockscreenClockExtension extends Extension {
 
         const syncCursorBlink = () => {
             this._cursorBlink = this._settings.get_boolean('cursor-blink') ?? true;
-            if (this._crossSessionManager) {
-                this._crossSessionManager._saveWallpaper();
-            }
             if (this._promptActive) {
                 this._startCursorBlink();
             } else {
