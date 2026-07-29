@@ -1317,10 +1317,10 @@ _syncLockscreenMessageLayout() {
         if (!authPrompt) return;
 
         const entry = this._findPromptEntry(authPrompt);
-        if (!entry || !entry.clutter_text) return;
-
-        const clutterText = entry.clutter_text;
-        clutterText.cursor_visible = true;
+        if (entry && entry.clutter_text) {
+            entry.clutter_text.cursor_blink = false;
+            entry.clutter_text.cursor_visible = true;
+        }
 
         let cursorBlink = this._currentWallpaperMetadata?.cursorBlink;
         if (cursorBlink === undefined) {
@@ -1331,9 +1331,8 @@ _syncLockscreenMessageLayout() {
             }
         }
 
-        if (cursorBlink === false) {
+        if (cursorBlink === false)
             return;
-        }
 
         let visible = true;
         this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -1348,15 +1347,15 @@ _syncLockscreenMessageLayout() {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            const targetClutterText = currentEntry.clutter_text;
+            currentEntry.clutter_text.cursor_blink = false;
 
-            if (!targetClutterText.has_key_focus()) {
-                targetClutterText.cursor_visible = false;
+            if (!currentEntry.clutter_text.has_key_focus()) {
+                currentEntry.clutter_text.cursor_visible = false;
                 return GLib.SOURCE_CONTINUE;
             }
 
             visible = !visible;
-            targetClutterText.cursor_visible = visible;
+            currentEntry.clutter_text.cursor_visible = visible;
             return GLib.SOURCE_CONTINUE;
         });
     }

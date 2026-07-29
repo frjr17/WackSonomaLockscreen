@@ -856,14 +856,13 @@ export default class WackLockscreenClockExtension extends Extension {
 
         const authPrompt = dialog._authPrompt ?? dialog._promptBox?._authPrompt;
         const entry = this._findPromptEntry(authPrompt);
-        if (!entry || !entry.clutter_text) return;
-
-        const clutterText = entry.clutter_text;
-        clutterText.cursor_visible = true;
-
-        if (this._cursorBlink === false) {
-            return;
+        if (entry && entry.clutter_text) {
+            entry.clutter_text.cursor_blink = false;
+            entry.clutter_text.cursor_visible = true;
         }
+
+        if (this._cursorBlink === false)
+            return;
 
         let visible = true;
         this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -874,20 +873,24 @@ export default class WackLockscreenClockExtension extends Extension {
             }
 
             const currentAuthPrompt = currentDialog._authPrompt ?? currentDialog._promptBox?._authPrompt;
+            if (!currentAuthPrompt) {
+                return GLib.SOURCE_CONTINUE;
+            }
+
             const currentEntry = this._findPromptEntry(currentAuthPrompt);
             if (!currentEntry || !currentEntry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            const targetClutterText = currentEntry.clutter_text;
+            currentEntry.clutter_text.cursor_blink = false;
 
-            if (!targetClutterText.has_key_focus()) {
-                targetClutterText.cursor_visible = false;
+            if (!currentEntry.clutter_text.has_key_focus()) {
+                currentEntry.clutter_text.cursor_visible = false;
                 return GLib.SOURCE_CONTINUE;
             }
 
             visible = !visible;
-            targetClutterText.cursor_visible = visible;
+            currentEntry.clutter_text.cursor_visible = visible;
             return GLib.SOURCE_CONTINUE;
         });
     }
