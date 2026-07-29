@@ -45,6 +45,7 @@ export class CrossSessionManager {
 
         this._settings.connectObject(
             'changed::prompt-vibrancy', save,
+            'changed::cursor-blink', save,
             'changed::cupertino-lockscreen-message-enable', save,
             'changed::cupertino-lockscreen-message-text', save,
             this
@@ -301,6 +302,7 @@ export class CrossSessionManager {
                 clockAlpha: this._clockAlpha ?? 0.6,
                 promptColor: this._promptColor,
                 promptVibrancy: this._settings ? this._settings.get_boolean('prompt-vibrancy') : true,
+                cursorBlink: this._settings ? this._settings.get_boolean('cursor-blink') : true,
                 lockscreenMessageText: this._settings ? this._settings.get_string('cupertino-lockscreen-message-text') : '',
                 lockscreenMessageEnable: this._settings ? this._settings.get_boolean('cupertino-lockscreen-message-enable') : false,
             };

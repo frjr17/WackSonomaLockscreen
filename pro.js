@@ -1316,26 +1316,68 @@ _syncLockscreenMessageLayout() {
         const authPrompt = this._dialog?._authPrompt;
         if (!authPrompt) return;
 
-        let visible = true;
-        this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        const entry = this._findPromptEntry(authPrompt);
+        if (!entry || !entry.clutter_text) return;
+
+        const clutterText = entry.clutter_text;
+        clutterText.cursor_blink = false;
+        clutterText.cursor_visible = true;
+
+        const curColor = clutterText.get_cursor_color?.() ?? clutterText.cursor_color;
+        const r = curColor ? curColor.red : 255;
+        const g = curColor ? curColor.green : 255;
+        const b = curColor ? curColor.blue : 255;
+
+        let cursorBlink = this._currentWallpaperMetadata?.cursorBlink;
+        if (cursorBlink === undefined) {
+            try {
+                cursorBlink = this._extension?.getSettings?.()?.get_boolean('cursor-blink') ?? true;
+            } catch (e) {
+                cursorBlink = true;
+            }
+        }
+
+        if (cursorBlink === false) {
+            clutterText.cursor_color = new Clutter.Color({ red: r, green: g, blue: b, alpha: 255 });
+            return;
+        }
+
+        const startTime = GLib.get_monotonic_time() / 1000;
+        this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
             const currentAuthPrompt = this._dialog?._authPrompt;
             if (!this._dialog || !currentAuthPrompt || !currentAuthPrompt.visible) {
                 this._cursorBlinkTimeoutId = 0;
                 return GLib.SOURCE_REMOVE;
             }
 
-            const entry = this._findPromptEntry(currentAuthPrompt);
-            if (!entry || !entry.clutter_text) {
+            const currentEntry = this._findPromptEntry(currentAuthPrompt);
+            if (!currentEntry || !currentEntry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            if (!entry.clutter_text.has_key_focus()) {
-                entry.clutter_text.cursor_visible = false;
+            const targetClutterText = currentEntry.clutter_text;
+            targetClutterText.cursor_blink = false;
+
+            if (!targetClutterText.has_key_focus()) {
+                targetClutterText.cursor_visible = false;
                 return GLib.SOURCE_CONTINUE;
             }
 
-            visible = !visible;
-            entry.clutter_text.cursor_visible = visible;
+            targetClutterText.cursor_visible = true;
+
+            const now = GLib.get_monotonic_time() / 1000;
+            const elapsed = (now - startTime) % 1000;
+
+            let alpha = 255;
+            if (elapsed >= 450 && elapsed < 700) {
+                const progress = (elapsed - 450) / 250;
+                alpha = Math.round(255 * 0.5 * (1 + Math.cos(progress * Math.PI)));
+            } else if (elapsed >= 700 && elapsed < 950) {
+                const progress = (elapsed - 700) / 250;
+                alpha = Math.round(255 * 0.5 * (1 - Math.cos(progress * Math.PI)));
+            }
+
+            targetClutterText.cursor_color = new Clutter.Color({ red: r, green: g, blue: b, alpha });
             return GLib.SOURCE_CONTINUE;
         });
     }

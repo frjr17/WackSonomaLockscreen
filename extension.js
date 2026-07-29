@@ -856,15 +856,24 @@ export default class WackLockscreenClockExtension extends Extension {
 
         const authPrompt = dialog._authPrompt ?? dialog._promptBox?._authPrompt;
         const entry = this._findPromptEntry(authPrompt);
-        if (entry && entry.clutter_text) {
-            entry.clutter_text.cursor_visible = true;
+        if (!entry || !entry.clutter_text) return;
+
+        const clutterText = entry.clutter_text;
+        clutterText.cursor_blink = false;
+        clutterText.cursor_visible = true;
+
+        const curColor = clutterText.get_cursor_color?.() ?? clutterText.cursor_color;
+        const r = curColor ? curColor.red : 255;
+        const g = curColor ? curColor.green : 255;
+        const b = curColor ? curColor.blue : 255;
+
+        if (this._cursorBlink === false) {
+            clutterText.cursor_color = new Clutter.Color({ red: r, green: g, blue: b, alpha: 255 });
+            return;
         }
 
-        if (this._cursorBlink === false)
-            return;
-
-        let visible = true;
-        this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        const startTime = GLib.get_monotonic_time() / 1000;
+        this._cursorBlinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
             const currentDialog = this._dialog;
             if (!currentDialog || !this._promptActive) {
                 this._cursorBlinkTimeoutId = null;
@@ -872,22 +881,34 @@ export default class WackLockscreenClockExtension extends Extension {
             }
 
             const currentAuthPrompt = currentDialog._authPrompt ?? currentDialog._promptBox?._authPrompt;
-            if (!currentAuthPrompt) {
-                return GLib.SOURCE_CONTINUE;
-            }
-
             const currentEntry = this._findPromptEntry(currentAuthPrompt);
             if (!currentEntry || !currentEntry.clutter_text) {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            if (!currentEntry.clutter_text.has_key_focus()) {
-                currentEntry.clutter_text.cursor_visible = false;
+            const targetClutterText = currentEntry.clutter_text;
+            targetClutterText.cursor_blink = false;
+
+            if (!targetClutterText.has_key_focus()) {
+                targetClutterText.cursor_visible = false;
                 return GLib.SOURCE_CONTINUE;
             }
 
-            visible = !visible;
-            currentEntry.clutter_text.cursor_visible = visible;
+            targetClutterText.cursor_visible = true;
+
+            const now = GLib.get_monotonic_time() / 1000;
+            const elapsed = (now - startTime) % 1000;
+
+            let alpha = 255;
+            if (elapsed >= 450 && elapsed < 700) {
+                const progress = (elapsed - 450) / 250;
+                alpha = Math.round(255 * 0.5 * (1 + Math.cos(progress * Math.PI)));
+            } else if (elapsed >= 700 && elapsed < 950) {
+                const progress = (elapsed - 700) / 250;
+                alpha = Math.round(255 * 0.5 * (1 - Math.cos(progress * Math.PI)));
+            }
+
+            targetClutterText.cursor_color = new Clutter.Color({ red: r, green: g, blue: b, alpha });
             return GLib.SOURCE_CONTINUE;
         });
     }
@@ -1089,6 +1110,9 @@ export default class WackLockscreenClockExtension extends Extension {
 
         const syncCursorBlink = () => {
             this._cursorBlink = this._settings.get_boolean('cursor-blink') ?? true;
+            if (this._crossSessionManager) {
+                this._crossSessionManager._saveWallpaper();
+            }
             if (this._promptActive) {
                 this._startCursorBlink();
             } else {
