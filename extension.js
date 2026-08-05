@@ -1122,8 +1122,7 @@ export default class WackLockscreenClockExtension extends Extension {
 
     _getClockAnimationParams() {
         const monitor = Main.layoutManager.primaryMonitor;
-        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const monitorY = monitor ? monitor.y / scaleFactor : 0;
+        const monitorY = monitor ? monitor.y : 0;
         const clockY = this._clockWrapper?.y ?? 0;
         const [, natHeight] = this._clockWrapper?.get_preferred_height(-1) ?? [0, 0];
         const [, dateHeight] = this._dateLabel?.get_preferred_height(-1) ?? [0, DATE_LABEL_HEIGHT];
@@ -1797,11 +1796,10 @@ export default class WackLockscreenClockExtension extends Extension {
     _positionClock() {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) return;
-        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const monitorX = monitor.x / scaleFactor;
-        const monitorY = monitor.y / scaleFactor;
-        const monitorWidth = monitor.width / scaleFactor;
-        const monitorHeight = monitor.height / scaleFactor;
+        const monitorX = monitor.x;
+        const monitorY = monitor.y;
+        const monitorWidth = monitor.width;
+        const monitorHeight = monitor.height;
 
         const wrapper = this._clockWrapper;
         const dateLabel = this._dateLabel;
@@ -1822,11 +1820,10 @@ export default class WackLockscreenClockExtension extends Extension {
         if (!this._hint) return;
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) return;
-        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const monitorX = monitor.x / scaleFactor;
-        const monitorY = monitor.y / scaleFactor;
-        const monitorWidth = monitor.width / scaleFactor;
-        const monitorHeight = monitor.height / scaleFactor;
+        const monitorX = monitor.x;
+        const monitorY = monitor.y;
+        const monitorWidth = monitor.width;
+        const monitorHeight = monitor.height;
 
         this._hint.set_width(-1);
         const [, natWidth] = this._hint.get_preferred_width(-1);
