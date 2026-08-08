@@ -393,6 +393,9 @@ this._lockscreenMessageScrollView.connectObject(
 
         if (this._bgManagers) {
             for (let i = 0; i < this._bgManagers.length; i++) {
+                // Guard against Blur My Shell stamping a _bms_pipeline on our
+                // manager objects (issue #16): destroy it before our own cleanup.
+                this._bgManagers[i]._bms_pipeline?.destroy();
                 this._bgManagers[i].destroy();
             }
             this._bgManagers = [];
@@ -847,8 +850,12 @@ _syncLockscreenMessageLayout() {
     _updateBackgrounds() {
         if (!this._backgroundGroup) return;
 
-        for (let i = 0; i < this._bgManagers.length; i++)
+        for (let i = 0; i < this._bgManagers.length; i++) {
+            // Guard against Blur My Shell stamping a _bms_pipeline on our
+            // manager objects (issue #16): destroy it before our own cleanup.
+            this._bgManagers[i]._bms_pipeline?.destroy();
             this._bgManagers[i].destroy();
+        }
 
         this._bgManagers = [];
         this._backgroundGroup.destroy_all_children();
