@@ -19,6 +19,9 @@ This is a part of the WACK project (WACK Ain't Cupertino, Kid), a collection of 
 This specific extension focuses on the lock screen (unlockDialog), replacing the standard clock with a clean, Sonoma-inspired layout.
 
 ## Features, and What it does
+- **NEW: [PRO] GDM Expansion** <br>
+Brings the macOS-style lock screen layouts and custom auth prompt styling (ONLY Cupertino Mode styling) system-wide to the GDM login screen, as well as synchronised wallpapers between last active session and GDM. <br><br>
+
 - **Custom Clock Layout** <br>
 Repositions the date and time to the upper third of the screen. <br><br>
 
@@ -87,6 +90,21 @@ Manual Tweak: If you want to change the blur strength or clock position, you can
 ## Usage Tips
 - **Best at 100% scaling** — The lockscreen layout is tuned for 100% (1×) display scaling. At fractional scaling (125%, 150%, etc.) the clock and prompt positions may appear slightly off. If you're on a HiDPI display, 100% + font scaling via GNOME Tweaks gives the cleanest result.
 - **Cupertino Mode** — Enable it in the extension preferences. Hit `Shift + N` on the lockscreen to toggle notification visibility when the user widget is always shown.
+
+## [PRO] GDM Login Screen Customization (Optional DLC)
+By default, Extensions.gnome.org (EGO) does not allow extensions to run on the GDM login screen. To bring the Sonoma-inspired layout, wallpaper synchronization, and custom styling to your actual GDM login page, you can install the optional **GDM Expansion DLC**:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/install-gdm-dlc.sh | bash
+```
+
+To revert back to the default GDM layout and remove the DLC at any time, run:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/uninstall-gdm-dlc.sh | bash
+```
+
+Unless you installed this extension from ```git clone```, you can just run the scripts in ```scripts``` directory directly.
 
 ## Compatibility
 Developed and tested on GNOME 50 (Fedora). Backward compatibility tested down to GNOME 46 via GNOME Boxes VMs. Reported issues on GNOME 49 + NVIDIA (works fine on GNOME 49 without NVIDIA). Feel free to open an issue if bugs are found, or clone and contribute!

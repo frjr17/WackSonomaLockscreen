@@ -2,31 +2,63 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import { CLOCK_ANIMATION_OPTIONS, PROMPT_ANIMATION_OPTIONS } from './anims.js';
 
 function _isWackShellInstalled() {
-    try {
-        const userPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'wack-shell@rinzler69-wastaken.github.com']);
-        const sysPath1 = '/usr/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
-        const sysPath2 = '/usr/local/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
-        return Gio.File.new_for_path(userPath).query_exists(null) ||
-               Gio.File.new_for_path(sysPath1).query_exists(null) ||
-               Gio.File.new_for_path(sysPath2).query_exists(null);
-    } catch (e) {
-        return false;
-    }
+    const userPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'wack-shell@rinzler69-wastaken.github.com']);
+    const sysPath1 = '/usr/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
+    const sysPath2 = '/usr/local/share/gnome-shell/extensions/wack-shell@rinzler69-wastaken.github.com';
+    return Gio.File.new_for_path(userPath).query_exists(null) ||
+        Gio.File.new_for_path(sysPath1).query_exists(null) ||
+        Gio.File.new_for_path(sysPath2).query_exists(null);
 }
 
 function _isWackShellEnabled() {
+    const shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
+    const enabled = shellSettings.get_strv('enabled-extensions');
+    return enabled.includes('wack-shell@rinzler69-wastaken.github.com');
+}
+
+// <GDM_EXCLUDE>
+function _getGdmStatus(dir) {
     try {
-        const shellSettings = new Gio.Settings({ schema_id: 'org.gnome.shell' });
-        const enabled = shellSettings.get_strv('enabled-extensions');
-        return enabled.includes('wack-shell@rinzler69-wastaken.github.com');
+        const sysPath = '/usr/share/gnome-shell/extensions/wack-lockscreen-clock@rinzler69-wastaken.github.com';
+        const sysDir = Gio.File.new_for_path(sysPath);
+
+        const activeDir = (sysDir.query_exists(null)) ? sysDir : dir;
+        if (!activeDir || !activeDir.query_exists(null))
+            return { enabled: false, reason: 'missing-sys-install' };
+
+        const hasProJs = activeDir.get_child('pro.js').query_exists(null);
+        const hasCrossSessionJs = activeDir.get_child('crossSessionManager.js').query_exists(null);
+        if (!hasProJs || !hasCrossSessionJs)
+            return { enabled: false, reason: 'missing-modules' };
+
+        let hasGdmSessionMode = false;
+        try {
+            const file = activeDir.get_child('metadata.json');
+            const [, contents] = file.load_contents(null);
+            const decoder = new TextDecoder('utf-8');
+            const metadata = JSON.parse(decoder.decode(contents));
+            hasGdmSessionMode = metadata['session-modes']?.includes('gdm') ?? false;
+        } catch (e) {
+            // ignore
+        }
+        if (!hasGdmSessionMode)
+            return { enabled: false, reason: 'missing-session-mode' };
+
+        const dconfFile = Gio.File.new_for_path('/etc/dconf/db/gdm.d/99-wack-lockscreen');
+        if (!dconfFile.query_exists(null))
+            return { enabled: false, reason: 'missing-dconf' };
+
+        return { enabled: true, reason: 'ok' };
     } catch (e) {
-        return false;
+        return { enabled: false, reason: 'error', error: e.message };
     }
 }
+// </GDM_EXCLUDE>
 
 export default class WackLockscreenClockPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
@@ -231,8 +263,9 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
             title: _('Lockscreen Mode'),
         });
 
-        const modeRow = new Adw.ActionRow({
+        const modeRow = new Adw.ExpanderRow({
             title: _('Mode'),
+            show_enable_switch: false,
         });
         modeGroup.add(modeRow);
 
@@ -255,10 +288,29 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         modeBox.append(dropdown);
         modeRow.add_suffix(modeBox);
 
+        // -- Shared options -------------------------------------------------
+        const cursorBlinkRow = new Adw.ActionRow({
+            title: _('Cursor Blinking'),
+            subtitle: _('Enable or disable text cursor blinking in the password field.'),
+        });
+        const cursorBlinkSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('cursor-blink'),
+        });
+        cursorBlinkSwitch.connect('notify::active', () => {
+            settings.set_boolean('cursor-blink', cursorBlinkSwitch.active);
+        });
+        settingsSignalIds.push(settings.connect('changed::cursor-blink', () => {
+            cursorBlinkSwitch.active = settings.get_boolean('cursor-blink');
+        }));
+        cursorBlinkRow.add_suffix(cursorBlinkSwitch);
+        cursorBlinkRow.activatable_widget = cursorBlinkSwitch;
+        modeRow.add_row(cursorBlinkRow);
+
         // -- Cupertino options ----------------------------------------------
         const alwaysShowUserRow = new Adw.ActionRow({
-            title: _('Always Show User Widget (Cupertino)'),
-            subtitle: _('Always shows user widget, hides notifications by default. Press Shift+N to show notifications.'),
+            title: _('Always Show User Widget'),
+            subtitle: _('Hides notifications by default. Press Shift+N to show notifications.'),
         });
         const alwaysShowUserSwitch = new Gtk.Switch({
             valign: Gtk.Align.CENTER,
@@ -272,22 +324,153 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         }));
         alwaysShowUserRow.add_suffix(alwaysShowUserSwitch);
         alwaysShowUserRow.activatable_widget = alwaysShowUserSwitch;
-        alwaysShowUserRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
+        modeRow.add_row(alwaysShowUserRow);
 
-        modeGroup.add(alwaysShowUserRow);
+        const promptVibrancyRow = new Adw.ActionRow({
+            title: _('Prompt Vibrancy'),
+            subtitle: _('Applies dynamic color to the password field based on wallpaper colors.'),
+        });
+        const promptVibrancySwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('prompt-vibrancy'),
+        });
+        promptVibrancySwitch.connect('notify::active', () => {
+            settings.set_boolean('prompt-vibrancy', promptVibrancySwitch.active);
+        });
+        settingsSignalIds.push(settings.connect('changed::prompt-vibrancy', () => {
+            promptVibrancySwitch.active = settings.get_boolean('prompt-vibrancy');
+        }));
+        promptVibrancyRow.add_suffix(promptVibrancySwitch);
+        promptVibrancyRow.activatable_widget = promptVibrancySwitch;
+        promptVibrancyRow.sensitive = settings.get_string('lockscreen-mode') === 'cupertino';
 
-        const unlockFadeRow = new Adw.ExpanderRow({
+        modeRow.add_row(promptVibrancyRow);
+
+        const messageEnableRow = new Adw.ActionRow({
+            title: _('Show message when locked'),
+        });
+        const messageEnableSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('cupertino-lockscreen-message-enable'),
+        });
+        messageEnableSwitch.connect('notify::active', () => {
+            settings.set_boolean('cupertino-lockscreen-message-enable', messageEnableSwitch.active);
+        });
+        settingsSignalIds.push(settings.connect('changed::cupertino-lockscreen-message-enable', () => {
+            messageEnableSwitch.active = settings.get_boolean('cupertino-lockscreen-message-enable');
+        }));
+        messageEnableRow.add_suffix(messageEnableSwitch);
+        messageEnableRow.activatable_widget = messageEnableSwitch;
+
+        const messageSetButton = new Gtk.Button({
+            label: _('Set...'),
+            valign: Gtk.Align.CENTER,
+            sensitive: settings.get_boolean('cupertino-lockscreen-message-enable'),
+        });
+
+        messageEnableSwitch.connect('notify::active', () => {
+            messageSetButton.sensitive = messageEnableSwitch.active;
+        });
+        settingsSignalIds.push(settings.connect('changed::cupertino-lockscreen-message-enable', () => {
+            messageSetButton.sensitive = settings.get_boolean('cupertino-lockscreen-message-enable');
+        }));
+
+        messageSetButton.connect('clicked', () => {
+            const dialog = new Adw.MessageDialog({
+                transient_for: window,
+                heading: _('Set a message to appear on the lockscreen'),
+                close_response: 'cancel',
+                modal: true,
+            });
+
+            const textView = new Gtk.TextView({
+                wrap_mode: Gtk.WrapMode.WORD_CHAR,
+                top_margin: 12,
+                bottom_margin: 12,
+                left_margin: 12,
+                right_margin: 12,
+                accepts_tab: false,
+            });
+
+            const buffer = textView.get_buffer();
+            buffer.set_text(
+                settings.get_string('cupertino-lockscreen-message-text'),
+                -1
+            );
+
+            const scrolled = new Gtk.ScrolledWindow({
+                min_content_height: 180,
+                min_content_width: 420,
+                hscrollbar_policy: Gtk.PolicyType.NEVER,
+                vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+                child: textView,
+            });
+
+            const frame = new Gtk.Frame({
+                margin_top: 12,
+                margin_bottom: 12,
+                margin_start: 6,
+                margin_end: 6,
+                child: scrolled,
+            });
+
+            dialog.set_extra_child(frame);
+
+            dialog.add_response('cancel', _('Cancel'));
+            dialog.add_response('ok', _('OK'));
+            dialog.set_response_appearance('ok', Adw.ResponseAppearance.SUGGESTED);
+
+            dialog.set_default_response('ok');
+
+            dialog.connect('response', (_self, response) => {
+                if (response === 'ok') {
+                    const start = buffer.get_start_iter();
+                    const end = buffer.get_end_iter();
+
+                    let text = buffer.get_text(start, end, false);
+
+                    // Hard cap at 250 characters
+                    if (text.length > 250)
+                        text = text.substring(0, 250);
+
+                    settings.set_string(
+                        'cupertino-lockscreen-message-text',
+                        text
+                    );
+                }
+
+                dialog.destroy();
+            });
+
+            dialog.present();
+
+            // Focus the editor immediately
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                textView.grab_focus();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+
+        messageEnableRow.add_suffix(messageSetButton);
+
+        const unlockFadeRow = new Adw.ActionRow({
             title: _('Unlock Crossfade'),
             subtitle: _('Crossfade the lockscreen with desktop when unlocking (automatically disabled in Power Saver mode).'),
-            show_enable_switch: true,
-            enable_expansion: settings.get_boolean('cupertino-unlock-fade'),
         });
-        unlockFadeRow.connect('notify::enable-expansion', () => {
-            settings.set_boolean('cupertino-unlock-fade', unlockFadeRow.enable_expansion);
+        const unlockFadeSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER,
+            active: settings.get_boolean('cupertino-unlock-fade'),
+        });
+        unlockFadeSwitch.connect('notify::active', () => {
+            settings.set_boolean('cupertino-unlock-fade', unlockFadeSwitch.active);
+            refreshUnlockFadeAvailability();
         });
         settingsSignalIds.push(settings.connect('changed::cupertino-unlock-fade', () => {
-            unlockFadeRow.enable_expansion = settings.get_boolean('cupertino-unlock-fade');
+            unlockFadeSwitch.active = settings.get_boolean('cupertino-unlock-fade');
+            refreshUnlockFadeAvailability();
         }));
+        unlockFadeRow.add_suffix(unlockFadeSwitch);
+        unlockFadeRow.activatable_widget = unlockFadeSwitch;
 
         // -- Crossfade Speed child row --------------------------------------
         const speedRow = new Adw.ActionRow({
@@ -356,19 +539,52 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         speedDropdown.visible = false;
         speedLinkedBox.visible = true;
 
-        unlockFadeRow.add_row(speedRow);
-        modeGroup.add(unlockFadeRow);
+        modeRow.add_row(unlockFadeRow);
+        modeRow.add_row(speedRow);
+        modeRow.add_row(messageEnableRow);
+
+        // -- Animation options (Legacy mode sub-settings) --------------------
+        const clockAnimRow = this._buildComboRow(
+            settings,
+            'clock-animation',
+            _('Clock Animation'),
+            _('Applied to the date and time while opening the password prompt'),
+            CLOCK_ANIMATION_OPTIONS
+        );
+
+        const promptAnimRow = this._buildComboRow(
+            settings,
+            'prompt-animation',
+            _('Prompt Animation'),
+            _('Applied to the authentication prompt while it appears'),
+            PROMPT_ANIMATION_OPTIONS
+        );
+
+        const resetRow = new Adw.ActionRow({
+            title: _('Reset Animations'),
+            subtitle: _('Restore defaults'),
+        });
+        const resetButton = new Gtk.Button({
+            icon_name: 'view-refresh-symbolic',
+            tooltip_text: _('Reset animations'),
+            css_classes: ['flat'],
+            valign: Gtk.Align.CENTER,
+        });
+        resetButton.connect('clicked', () => {
+            settings.reset('clock-animation');
+            settings.reset('prompt-animation');
+        });
+        resetRow.add_suffix(resetButton);
+        resetRow.activatable_widget = resetButton;
+
+        modeRow.add_row(clockAnimRow);
+        modeRow.add_row(promptAnimRow);
+        modeRow.add_row(resetRow);
 
         animPage.add(modeGroup);
 
-        // -- Animation options (greyed out in Cupertino mode) ---------------
-        const animationGroup = new Adw.PreferencesGroup({
-            title: _('Lockscreen Animations'),
-        });
-        animationGroup.sensitive = settings.get_string('lockscreen-mode') !== 'cupertino';
-
         let selfChangeMode = false;
-        const refreshUnlockFadeAvailability = () => {
+        function refreshUnlockFadeAvailability() {
             const isCup = settings.get_string('lockscreen-mode') === 'cupertino';
             const wackShellInstalled = _isWackShellInstalled();
             const wackShellEnabled = _isWackShellEnabled();
@@ -380,8 +596,10 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
                 subtitleText += ' ' + _('Requires WACK Shell to be enabled.');
 
             unlockFadeRow.subtitle = subtitleText;
-            unlockFadeRow.sensitive = isCup && wackShellInstalled && wackShellEnabled;
-        };
+            const available = isCup && wackShellInstalled && wackShellEnabled;
+            unlockFadeRow.sensitive = available;
+            speedRow.sensitive = available && settings.get_boolean('cupertino-unlock-fade');
+        }
         const syncModeFromSettings = () => {
             const val = settings.get_string('lockscreen-mode');
             const isCup = val === 'cupertino';
@@ -401,9 +619,27 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
                 modeRow.subtitle = _('macOS Sonoma-style clock over the classic, GNOME-compliant layout and flow.');
             }
 
+            // Always keep it expandable since both modes now have sub-settings, but do not auto-expand
+            modeRow.enable_expansion = true;
+
+            // Cupertino visibility/sensitivity
+            alwaysShowUserRow.visible = isCup;
             alwaysShowUserRow.sensitive = isCup;
+            promptVibrancyRow.visible = isCup;
+            promptVibrancyRow.sensitive = isCup;
+            messageEnableRow.visible = isCup;
+            messageEnableRow.sensitive = isCup;
+            unlockFadeRow.visible = isCup;
+            speedRow.visible = isCup;
             refreshUnlockFadeAvailability();
-            animationGroup.sensitive = !isCup;
+
+            // Legacy visibility/sensitivity
+            clockAnimRow.visible = !isCup;
+            clockAnimRow.sensitive = !isCup;
+            promptAnimRow.visible = !isCup;
+            promptAnimRow.sensitive = !isCup;
+            resetRow.visible = !isCup;
+            resetRow.sensitive = !isCup;
         };
 
         const updateModeSetting = (index) => {
@@ -455,40 +691,6 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         }
 
         syncModeFromSettings();
-
-        animationGroup.add(this._buildComboRow(
-            settings,
-            'clock-animation',
-            _('Clock Animation'),
-            _('Applied to the date and time while opening the password prompt'),
-            CLOCK_ANIMATION_OPTIONS));
-
-        animationGroup.add(this._buildComboRow(
-            settings,
-            'prompt-animation',
-            _('Prompt Animation'),
-            _('Applied to the authentication prompt while it appears'),
-            PROMPT_ANIMATION_OPTIONS));
-
-        const resetRow = new Adw.ActionRow({
-            title: _('Reset Animations'),
-            subtitle: _('Restore defaults'),
-        });
-        const resetButton = new Gtk.Button({
-            icon_name: 'view-refresh-symbolic',
-            tooltip_text: _('Reset animations'),
-            css_classes: ['flat'],
-            valign: Gtk.Align.CENTER,
-        });
-        resetButton.connect('clicked', () => {
-            settings.reset('clock-animation');
-            settings.reset('prompt-animation');
-        });
-        resetRow.add_suffix(resetButton);
-        resetRow.activatable_widget = resetButton;
-        animationGroup.add(resetRow);
-
-        animPage.add(animationGroup);
 
         // -- Screen Timeout options -----------------------------------------
         const timeoutGroup = new Adw.PreferencesGroup({
@@ -557,6 +759,201 @@ export default class WackLockscreenClockPreferences extends ExtensionPreferences
         settingsSignalIds.push(settings.connect('changed::enable-unblank', syncSensitivity));
 
         animPage.add(timeoutGroup);
+
+        // -- Extras group ---------------------------------------------------
+        const extrasGroup = new Adw.PreferencesGroup({
+            title: _('Extras'),
+        }); let showDocs = true;
+        // <GDM_EXCLUDE>
+        const gdmStatus = _getGdmStatus(this.dir);
+
+        if (gdmStatus.enabled) {
+            showDocs = false;
+            // 1. GDM Expansion Expander Row (Enabled)
+            const gdmExpander = new Adw.ExpanderRow({
+                title: _('[PRO] GDM Expansion'),
+                subtitle: _('Status: Enabled. Custom layout is active on GDM.'),
+            });
+
+            const gdmStatusLabel = new Gtk.Label({
+                valign: Gtk.Align.CENTER,
+                label: _('Enabled'),
+            });
+            gdmStatusLabel.add_css_class('success');
+            gdmExpander.add_suffix(gdmStatusLabel);
+
+            const uninstallRow = new Adw.ActionRow({
+                title: _('GDM Expansion - Remove'),
+                subtitle: _('Revert GDM login screen layout to GNOME Default. To uninstall, run copied command in a terminal.'),
+            });
+
+            const copyBtn = new Gtk.Button({
+                icon_name: 'edit-copy-symbolic',
+                tooltip_text: _('Copy uninstall command to clipboard'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            copyBtn.connect('clicked', () => {
+                const clipboard = Gdk.Display.get_default().get_clipboard();
+                clipboard.set('curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/uninstall-gdm-dlc.sh | bash');
+                window.add_toast(new Adw.Toast({
+                    title: _('Copied uninstall command to clipboard!'),
+                }));
+            });
+
+            uninstallRow.add_suffix(copyBtn);
+            gdmExpander.add_row(uninstallRow);
+            extrasGroup.add(gdmExpander);
+        } else {
+            let explanation = '';
+            if (gdmStatus.reason === 'missing-sys-install') {
+                explanation = _('Extension is not installed system-wide in /usr/share.');
+            } else if (gdmStatus.reason === 'missing-modules') {
+                explanation = _('GDM expansion modules (pro.js) are missing system-wide.');
+            } else if (gdmStatus.reason === 'missing-session-mode') {
+                explanation = _('GDM session mode is not enabled in system-wide metadata.');
+            } else if (gdmStatus.reason === 'missing-dconf') {
+                explanation = _('GDM dconf override configuration (/etc/dconf/db/gdm.d) is missing.');
+            } else {
+                explanation = _('GDM integration is not configured.');
+            }
+
+            const gdmExpander = new Adw.ExpanderRow({
+                title: _('[PRO] GDM Expansion'),
+                subtitle: `${_('Status: Disabled.')} ${explanation}`,
+            });
+
+            const gdmStatusLabel = new Gtk.Label({
+                valign: Gtk.Align.CENTER,
+                label: _('Disabled'),
+            });
+            gdmStatusLabel.add_css_class('error');
+            gdmExpander.add_suffix(gdmStatusLabel);
+
+            const installRow = new Adw.ActionRow({
+                title: _('Enable GDM DLC Support'),
+                subtitle: _('Click icon to copy installer command, then run it in a terminal.'),
+            });
+
+            const copyInstallBtn = new Gtk.Button({
+                icon_name: 'edit-copy-symbolic',
+                tooltip_text: _('Copy install command to clipboard'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            copyInstallBtn.connect('clicked', () => {
+                const clipboard = Gdk.Display.get_default().get_clipboard();
+                clipboard.set('curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/install-gdm-dlc.sh | bash');
+                window.add_toast(new Adw.Toast({
+                    title: _('Copied install command to clipboard!'),
+                }));
+            });
+
+            installRow.add_suffix(copyInstallBtn);
+            gdmExpander.add_row(installRow);
+            extrasGroup.add(gdmExpander);
+        }
+        // </GDM_EXCLUDE>
+
+        if (showDocs) {
+            const docsRow = new Adw.ActionRow({
+                title: _('Upgrade to [PRO]'),
+                subtitle: _('Check PRO features of this extension on this extension\'s GitHub repo.'),
+            });
+            const docsBtn = new Gtk.Button({
+                icon_name: 'adw-external-link-symbolic',
+                tooltip_text: _('Visit documentation on GitHub'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            docsBtn.connect('clicked', () => {
+                Gtk.show_uri(window, this.metadata.url, GLib.CURRENT_TIME);
+            });
+            docsRow.add_suffix(docsBtn);
+            extrasGroup.add(docsRow);
+        }
+
+        // 2. WACK Shell Integration Expander Row
+        const wackShellExpander = new Adw.ExpanderRow({
+            title: _('[BETA] WACK Shell Integration'),
+        });
+        const wackShellStatusLabel = new Gtk.Label({
+            valign: Gtk.Align.CENTER,
+        });
+
+        const isWackShellInstalled = _isWackShellInstalled();
+        if (isWackShellInstalled) {
+            wackShellExpander.subtitle = _('Installed. Enables crossfade transitions and Cupertino-inspired shell customisations.');
+            wackShellStatusLabel.label = _('Installed');
+            wackShellStatusLabel.add_css_class('success');
+            wackShellExpander.add_suffix(wackShellStatusLabel);
+
+            const checkUpdatesRow = new Adw.ActionRow({
+                title: _('WACK Shell - Check for Updates'),
+                subtitle: _('Copy check command to verify if a newer version of WACK Shell is available.'),
+            });
+
+            const checkBtn = new Gtk.Button({
+                icon_name: 'edit-copy-symbolic',
+                tooltip_text: _('Copy update-check command to clipboard'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            checkBtn.connect('clicked', () => {
+                const clipboard = Gdk.Display.get_default().get_clipboard();
+                clipboard.set('curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/install-wack-shell.sh | bash -s -- --check');
+                window.add_toast(new Adw.Toast({
+                    title: _('Copied WACK Shell update-check command to clipboard!'),
+                }));
+            });
+
+            checkUpdatesRow.add_suffix(checkBtn);
+            wackShellExpander.add_row(checkUpdatesRow);
+        } else {
+            wackShellExpander.subtitle = _('Not installed. Install WACK Shell to unlock transition effects.');
+            wackShellStatusLabel.label = _('Not Installed');
+            wackShellStatusLabel.add_css_class('error');
+            wackShellExpander.add_suffix(wackShellStatusLabel);
+
+            const installShellRow = new Adw.ActionRow({
+                title: _('WACK Shell - Install'),
+                subtitle: _('Get advanced desktop crossfade transitions and Cupertino-inspired shell customisations. May contain bugs, report if found.'),
+            });
+
+            const copyBtn = new Gtk.Button({
+                icon_name: 'edit-copy-symbolic',
+                tooltip_text: _('Copy install command to clipboard'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            copyBtn.connect('clicked', () => {
+                const clipboard = Gdk.Display.get_default().get_clipboard();
+                clipboard.set('curl -sSL https://raw.githubusercontent.com/rinzler69-wastaken/wack-sonoma-lockscreen/main/scripts/install-wack-shell.sh | bash');
+                window.add_toast(new Adw.Toast({
+                    title: _('Copied WACK Shell install command to clipboard!'),
+                }));
+            });
+
+            const linkBtn = new Gtk.Button({
+                icon_name: 'web-browser-symbolic',
+                tooltip_text: _('Open WACK Shell repository'),
+                css_classes: ['flat'],
+                valign: Gtk.Align.CENTER,
+            });
+            linkBtn.connect('clicked', () => {
+                Gtk.show_uri(window, 'https://github.com/rinzler69-wastaken/wack-shell', GLib.CURRENT_TIME);
+            });
+
+            installShellRow.add_suffix(copyBtn);
+            installShellRow.add_suffix(linkBtn);
+            wackShellExpander.add_row(installShellRow);
+        }
+
+        extrasGroup.add(wackShellExpander);
+
+
+
+        animPage.add(extrasGroup);
         window.add(animPage);
 
         // Disconnect all settings signals when the window is destroyed so stale

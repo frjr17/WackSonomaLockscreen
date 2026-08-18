@@ -4,16 +4,18 @@ import { CUPERTINO_PROMPT_VERTICAL_FRACTION } from './constants.js';
 
 // Extracted magic numbers for clarity and easy tweaking
 const NOTIF_MIN_TOP_MARGIN_FRACTION = 0.1; // Was: height / 10.0
+const MESSAGE_PROMPT_GAP = 48;
 const SWITCH_USER_MARGIN = 24; // Logical pixels for switch user button spacing
 
 export const WackLayout = GObject.registerClass(
 class WackLayout extends Clutter.LayoutManager {
-    _init(extension, stack, notifications, switchUserButton) {
+    _init(extension, stack, notifications, switchUserButton, messageContainer = null) {
         super._init();
         this._extension = extension;
         this._stack = stack;
         this._notifications = notifications;
         this._switchUserButton = switchUserButton;
+        this._messageContainer = messageContainer;
     }
 
     vfunc_get_preferred_width(_container, forHeight) {
@@ -72,6 +74,22 @@ class WackLayout extends Clutter.LayoutManager {
         stackBox.x2 = stackBox.x1 + stackWidth;
         stackBox.y2 = stackY + stackHeight;
         this._stack.allocate(stackBox);
+
+        if (this._messageContainer && this._messageContainer.visible) {
+            const msgW = this._extension._lockscreenMessageWidth ?? 0;
+            const msgH = this._extension._lockscreenMessageHeight ?? 0;
+
+            if (msgW > 0 && msgH > 0) {
+                const msgBox = new Clutter.ActorBox();
+
+                msgBox.x1 = Math.floor((width - msgW) / 2.0);
+                msgBox.y1 = stackY - MESSAGE_PROMPT_GAP - msgH;
+                msgBox.x2 = msgBox.x1 + msgW;
+                msgBox.y2 = msgBox.y1 + msgH;
+
+                this._messageContainer.allocate(msgBox);
+            }
+        }
 
         // 4. Allocate Switch User Button (if visible and exists)
         if (this._switchUserButton?.visible) {

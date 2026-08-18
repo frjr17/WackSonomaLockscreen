@@ -414,11 +414,10 @@ export class NotificationManager {
         if (!this._extension._overflowLabel) return;
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) return;
-        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const monitorX = monitor.x / scaleFactor;
-        const monitorY = monitor.y / scaleFactor;
-        const monitorWidth = monitor.width / scaleFactor;
-        const monitorHeight = monitor.height / scaleFactor;
+        const monitorX = monitor.x;
+        const monitorY = monitor.y;
+        const monitorWidth = monitor.width;
+        const monitorHeight = monitor.height;
 
         const [, natWidth] = this._extension._overflowLabel.get_preferred_width(-1);
         const [, natHeight] = this._extension._overflowLabel.get_preferred_height(-1);

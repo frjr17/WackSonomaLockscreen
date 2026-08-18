@@ -122,6 +122,21 @@ msgstr "Klassisk"
 msgid "Lockscreen Mode"
 msgstr "Låseskærmtilstand"
 
+msgid "Show message when locked"
+msgstr "Vis besked ved låsning"
+
+msgid "Set..."
+msgstr "Indstil..."
+
+msgid "Set a message to appear on the lockscreen"
+msgstr "Indstil en besked, der skal vises på låseskærmen"
+
+msgid "Cancel"
+msgstr "Annuller"
+
+msgid "OK"
+msgstr "OK"
+
 msgid "Mode"
 msgstr "Mode"
 
@@ -167,9 +182,129 @@ msgstr "Gendan standardindstillinger"
 msgid "Saweria"
 msgstr "Saweria"
 
+msgid "Show a custom message above the user prompt stack."
+msgstr "Viser en brugerdefineret besked over brugerens loginfelt."
+
 msgid "Screen Timeout"
 msgstr "Skærm timeout"
 
 msgid "Time to wait before turning off the screen"
 msgstr "Vendetid før skærmen slukkes"
+
+msgid "Extras"
+msgstr "Ekstra"
+
+msgid "[PRO] GDM Expansion"
+msgstr "[PRO] GDM-udvidelse"
+
+msgid "Enabled. Custom layout is active on GDM."
+msgstr "Aktiveret. Brugerdefineret layout er aktivt på GDM."
+
+msgid "Enabled"
+msgstr "Aktiveret"
+
+msgid "Disabled"
+msgstr "Deaktiveret"
+
+msgid "Disabled."
+msgstr "Deaktiveret."
+
+msgid "GDM and Cross Session Module are missing."
+msgstr "GDM- og Cross Session-moduler mangler."
+
+msgid "GDM dconf override configuration is missing."
+msgstr "GDM dconf-tilsidesættelseskonfiguration mangler."
+
+msgid "GDM integration is not configured."
+msgstr "GDM-integration er ikke konfigureret."
+
+msgid "Upgrade to Pro"
+msgstr "Opgrader till Pro"
+
+msgid "Get a Sonoma-inspired GDM login screen layout and automatically synchronize your wallpapers from the active user session. To upgrade, run copied command in a terminal."
+msgstr "Få et Sonoma-inspireret GDM-loginskærmslayout, og synkroniser automatisk dine tapeter fra den aktive brugersession. For at opgradere skal du køre den kopierede kommando i en terminal."
+
+msgid "Copy upgrade command to clipboard"
+msgstr "Kopier opgraderingskommando til udklipsholder"
+
+msgid "Copied upgrade command to clipboard!"
+msgstr "Opgraderingskommando kopieret til udklipsholder!"
+
+msgid "Uninstall GDM Expansion"
+msgstr "Afinstaller GDM-udvidelse"
+
+msgid "Revert GDM login screen layout to GNOME Default. To uninstall, run copied command in a terminal."
+msgstr "Gendan GDM-loginskærmslayout til GNOME-standard. For at afinstallere skal du køre den kopierede kommando i een terminal."
+
+msgid "Copy uninstall command to clipboard"
+msgstr "Kopier afinstalleringskommando til udklipsholder"
+
+msgid "Copied uninstall command to clipboard!"
+msgstr "Afinstalleringskommando kopieret til udklipsholder!"
+
+msgid "[BETA] WACK Shell Integration"
+msgstr "[BETA] WACK Shell-integration"
+
+msgid "Installed. Enables crossfade transitions and Cupertino-inspired shell customisations."
+msgstr "Installeret. Muliggør crossfade-overgange og Cupertino-inspirerede shell-tilpasninger."
+
+msgid "Upgrade to [PRO]"
+msgstr "Opgrader til [PRO]"
+
+msgid "Installed"
+msgstr "Installeret"
+
+msgid "Not installed. Install WACK Shell to unlock transition effects."
+msgstr "Ikke installeret. Installer WACK Shell for at låse op for overgangseffekter."
+
+msgid "Not Installed"
+msgstr "Ikke installeret"
+
+msgid "Install WACK Shell"
+msgstr "Installer WACK Shell"
+
+msgid "Get advanced desktop crossfade transitions and Cupertino-inspired shell customisations. May contain bugs, report if found."
+msgstr "Få avancerede desktop-crossfade-overgange og Cupertino-inspirerede shell-tilpasninger. Kan indeholde fejl, rapporter hvis fundet."
+
+msgid "Copy install command to clipboard"
+msgstr "Kopier installationskommando til udklipsholder"
+
+msgid "Copied WACK Shell install command to clipboard!"
+msgstr "WACK Shell installationskommando kopieret til udklipsholder!"
+
+msgid "Open WACK Shell repository"
+msgstr "Åben WACK Shell repository"
+
+msgid "Check for Updates"
+msgstr "Søg efter opdateringer"
+
+msgid "Copy check command to verify if a newer version of WACK Shell is available."
+msgstr "Kopier kontrolkommandoen for at bekræfte, om en nyere version af WACK Shell er tilgængelig."
+
+msgid "Copy update-check command to clipboard"
+msgstr "Kopier opdateringskontrolkommando til udklipsholder"
+
+msgid "Copied WACK Shell update-check command to clipboard!"
+msgstr "Kopierede WACK Shell-opdateringskontrolkommando til udklipsholder!"
+
+msgid "Extras - Status"
+msgstr "Ekstra - Status"
+
+msgid "Extras - Actions"
+msgstr "Ekstra - Handlinger"
+
+msgid "GDM Expansion - Remove"
+msgstr "GDM-udvidelse - Fjern"
+
+msgid "WACK Shell - Check for Updates"
+msgstr "WACK Shell - Søg efter opdateringer"
+
+msgid "WACK Shell - Install"
+msgstr "WACK Shell - Installer"
+
+msgid "Upcoming Features"
+msgstr "Kommende funktioner"
+
+msgid "Check PRO features of this extension on this extension's GitHub repo."
+msgstr "Tjek PRO-funktionerne for denne udvidelse i dens GitHub-arkiv."
 

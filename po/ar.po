@@ -122,6 +122,21 @@ msgstr "كلاسيكي"
 msgid "Lockscreen Mode"
 msgstr "وضع قفل الشاشة"
 
+msgid "Show message when locked"
+msgstr "إظهار رسالة عند القفل"
+
+msgid "Set..."
+msgstr "تعيين..."
+
+msgid "Set a message to appear on the lockscreen"
+msgstr "تعيين رسالة لتظهر على شاشة القفل"
+
+msgid "Cancel"
+msgstr "إلغاء"
+
+msgid "OK"
+msgstr "موافق"
+
 msgid "Mode"
 msgstr "وضع"
 
@@ -167,9 +182,129 @@ msgstr "استعادة الإعدادات الافتراضية"
 msgid "Saweria"
 msgstr "ساويرية"
 
+msgid "Show a custom message above the user prompt stack."
+msgstr "عرض رسالة مخصصة فوق حقل إدخال المستخدم."
+
 msgid "Screen Timeout"
 msgstr "مهلة الشاشة"
 
 msgid "Time to wait before turning off the screen"
 msgstr "المدة الزمنية sebelum إطفاء الشاشة"
+
+msgid "Extras"
+msgstr "إضافات"
+
+msgid "[PRO] GDM Expansion"
+msgstr "[PRO] توسيع GDM"
+
+msgid "Enabled. Custom layout is active on GDM."
+msgstr "مفعّل. المظهر المخصص نشط على GDM."
+
+msgid "Enabled"
+msgstr "مفعّل"
+
+msgid "Disabled"
+msgstr "معطّل"
+
+msgid "Disabled."
+msgstr "معطّل."
+
+msgid "GDM and Cross Session Module are missing."
+msgstr "ملفات GDM و Cross Session مفقودة."
+
+msgid "GDM dconf override configuration is missing."
+msgstr "تكوين تجاوز dconf لـ GDM مفقود."
+
+msgid "GDM integration is not configured."
+msgstr "لم يتم تكوين تكامل GDM."
+
+msgid "Upgrade to Pro"
+msgstr "الترقية إلى Pro"
+
+msgid "Get a Sonoma-inspired GDM login screen layout and automatically synchronize your wallpapers from the active user session. To upgrade, run copied command in a terminal."
+msgstr "احصل على مظهر شاشة تسجيل دخول GDM مستوحى من Sonoma وقم بمزامنة خلفياتك تلقائيًا من جلسة المستخدم النشطة. للترقية، قم بتشغيل الأمر المنسوخ في الطرفية."
+
+msgid "Copy upgrade command to clipboard"
+msgstr "نسخ أمر الترقية إلى الحافظة"
+
+msgid "Copied upgrade command to clipboard!"
+msgstr "تم نسخ أمر الترقية إلى الحافظة!"
+
+msgid "Uninstall GDM Expansion"
+msgstr "إلغاء تثبيت توسيع GDM"
+
+msgid "Revert GDM login screen layout to GNOME Default. To uninstall, run copied command in a terminal."
+msgstr "استعادة مظهر شاشة تسجيل دخول GDM إلى الوضع الافتراضي لـ GNOME. لإلغاء التثبيت، قم بتشغيل الأمر المنسوخ في الطرفية."
+
+msgid "Copy uninstall command to clipboard"
+msgstr "نسخ أمر إلغاء التثبيت إلى الحافظة"
+
+msgid "Copied uninstall command to clipboard!"
+msgstr "تم نسخ أمر إلغاء التثبيت إلى الحافظة!"
+
+msgid "[BETA] WACK Shell Integration"
+msgstr "[BETA] تكامل WACK Shell"
+
+msgid "Installed. Enables crossfade transitions and Cupertino-inspired shell customisations."
+msgstr "تم التثبيت. يتيح انتقالات التلاشي المتبادل وتخصيصات الواجهة المستوحاة من كوبرتينو."
+
+msgid "Upgrade to [PRO]"
+msgstr "الترقية إلى [PRO]"
+
+msgid "Installed"
+msgstr "مثبت"
+
+msgid "Not installed. Install WACK Shell to unlock transition effects."
+msgstr "غير مثبت. قم بتثبيت WACK Shell لفتح تأثيرات الانتقال."
+
+msgid "Not Installed"
+msgstr "غير مثبت"
+
+msgid "Install WACK Shell"
+msgstr "تثبيت WACK Shell"
+
+msgid "Get advanced desktop crossfade transitions and Cupertino-inspired shell customisations. May contain bugs, report if found."
+msgstr "احصل على انتقالات تلاشي متبادل متقدمة لسطح المكتب وتخصيصات واجهة مستوحاة من كوبرتينو. قد يحتوي على أخطاء، يرجى الإبلاغ عنها إن وجدت."
+
+msgid "Copy install command to clipboard"
+msgstr "نسخ أمر التثبيت إلى الحافظة"
+
+msgid "Copied WACK Shell install command to clipboard!"
+msgstr "تم نسخ أمر تثبيت WACK Shell إلى الحافظة!"
+
+msgid "Open WACK Shell repository"
+msgstr "افتح مستودع WACK Shell"
+
+msgid "Check for Updates"
+msgstr "التحقق من التحديثات"
+
+msgid "Copy check command to verify if a newer version of WACK Shell is available."
+msgstr "انسخ أمر التحقق للتأكد من توفر إصدار أحدث من WACK Shell."
+
+msgid "Copy update-check command to clipboard"
+msgstr "نسخ أمر التحقق من التحديث إلى الحافظة"
+
+msgid "Copied WACK Shell update-check command to clipboard!"
+msgstr "تم نسخ أمر التحقق من تحديث WACK Shell إلى الحافظة!"
+
+msgid "Extras - Status"
+msgstr "الإضافات - الحالة"
+
+msgid "Extras - Actions"
+msgstr "الإضافات - الإجراءات"
+
+msgid "GDM Expansion - Remove"
+msgstr "توسيع GDM - إزالة"
+
+msgid "WACK Shell - Check for Updates"
+msgstr "WACK Shell - التحقق من التحديثات"
+
+msgid "WACK Shell - Install"
+msgstr "WACK Shell - تثبيت"
+
+msgid "Upcoming Features"
+msgstr "الميزات القادمة"
+
+msgid "Check PRO features of this extension on this extension's GitHub repo."
+msgstr "تحقق من ميزات PRO لهذا الامتداد على مستودع GitHub الخاص به."
 

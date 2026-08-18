@@ -130,12 +130,8 @@ export const WackClock = GObject.registerClass(
         }
 
         setWallpaperAlpha(alpha) {
-            try {
-                this._time.set_style(`color: rgba(255, 255, 255, ${alpha});`);
-                this._dateOutput.set_style(`color: rgba(255, 255, 255, ${alpha});`);
-            } catch (e) {
-                console.error(`[WACK/Clock] Failed to set wallpaper alpha: ${e}`);
-            }
+            this._time.set_style(`color: rgba(255, 255, 255, ${alpha});`);
+            this._dateOutput.set_style(`color: rgba(255, 255, 255, ${alpha});`);
         }
 
 

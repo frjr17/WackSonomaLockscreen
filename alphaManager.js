@@ -1,12 +1,321 @@
 import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {
+    resolveSlideshowXmlContent,
+    CUPERTINO_PROMPT_VERTICAL_FRACTION,
+} from './constants.js';
 
 const userName = GLib.get_user_name();
 const CACHE_FILE = `/var/tmp/wack-wallpaper-alpha-cache-${userName}.json`;
 const _cache = new Map();
 let _loaded = false;
 let _loadPromise = null;
+let _bgSettings = null;
+
+function getBgSettings() {
+    if (!_bgSettings)
+        _bgSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.background' });
+    return _bgSettings;
+}
+
+function getWallpaperFileInfo(filePath) {
+    return new Promise((resolve) => {
+        GdkPixbuf.Pixbuf.get_file_info_async(filePath, null, (source, result) => {
+            try {
+                const [format, width, height] = GdkPixbuf.Pixbuf.get_file_info_finish(result);
+                if (width > 0 && height > 0) {
+                    resolve({ width, height });
+                } else {
+                    resolve(null);
+                }
+            } catch (e) {
+                resolve(null);
+            }
+        });
+    });
+}
+
+function mapScreenToSourceCoords(x1, x2, y1, y2, Rw, Rs, pictureOptions, Ww, Wh, Sw, Sh) {
+    let mapFn;
+
+    if (pictureOptions === 'zoom') {
+        mapFn = (u, v) => {
+            let x_norm, y_norm;
+            if (Rw > Rs) {
+                x_norm = u * (Rs / Rw) + (1 - Rs / Rw) / 2;
+                y_norm = v;
+            } else {
+                x_norm = u;
+                y_norm = v * (Rw / Rs) + (1 - Rw / Rs) / 2;
+            }
+            return { x: x_norm, y: y_norm };
+        };
+    } else if (pictureOptions === 'scaled') {
+        mapFn = (u, v) => {
+            let x_norm, y_norm;
+            if (Rw > Rs) {
+                x_norm = u;
+                y_norm = v * (Rw / Rs) + (1 - Rw / Rs) / 2;
+            } else {
+                x_norm = u * (Rs / Rw) + (1 - Rs / Rw) / 2;
+                y_norm = v;
+            }
+            return {
+                x: Math.max(0.0, Math.min(1.0, x_norm)),
+                y: Math.max(0.0, Math.min(1.0, y_norm))
+            };
+        };
+    } else if (pictureOptions === 'centered') {
+        mapFn = (u, v) => {
+            const x_norm = u * (Sw / Ww) + (1 - Sw / Ww) / 2;
+            const y_norm = v * (Sh / Wh) + (1 - Sh / Wh) / 2;
+            return {
+                x: Math.max(0.0, Math.min(1.0, x_norm)),
+                y: Math.max(0.0, Math.min(1.0, y_norm))
+            };
+        };
+    } else if (pictureOptions === 'stretched') {
+        mapFn = (u, v) => {
+            return { x: u, y: v };
+        };
+    } else if (pictureOptions === 'wallpaper') {
+        // Tiled-at-native-size starting from the top-left of the screen
+        mapFn = (u, v) => {
+            const x_pixel = u * Sw;
+            const y_pixel = v * Sh;
+            const x_norm = Ww > 0 ? (x_pixel % Ww) / Ww : 0;
+            const y_norm = Wh > 0 ? (y_pixel % Wh) / Wh : 0;
+            return { x: x_norm, y: y_norm };
+        };
+    } else {
+        // Fallback for spanned (which spans across multiple monitors violating single monitor layout
+        // assumptions), none, or invalid settings - default to zoom math
+        mapFn = (u, v) => {
+            let x_norm, y_norm;
+            if (Rw > Rs) {
+                x_norm = u * (Rs / Rw) + (1 - Rs / Rw) / 2;
+                y_norm = v;
+            } else {
+                x_norm = u;
+                y_norm = v * (Rw / Rs) + (1 - Rw / Rs) / 2;
+            }
+            return { x: x_norm, y: y_norm };
+        };
+    }
+
+    const p1 = mapFn(x1, y1);
+    const p2 = mapFn(x2, y2);
+
+    return {
+        x1: Math.min(p1.x, p2.x),
+        x2: Math.max(p1.x, p2.x),
+        y1: Math.min(p1.y, p2.y),
+        y2: Math.max(p1.y, p2.y)
+    };
+}
+
+function rgbToHsl(r, g, b) {
+    const rNorm = r / 255;
+    const gNorm = g / 255;
+    const bNorm = b / 255;
+
+    const max = Math.max(rNorm, gNorm, bNorm);
+    const min = Math.min(rNorm, gNorm, bNorm);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0; // achromatic
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
+            case gNorm: h = (bNorm - rNorm) / d + 2; break;
+            case bNorm: h = (rNorm - gNorm) / d + 4; break;
+        }
+        h /= 6;
+    }
+
+    return {
+        h: h * 360,
+        s: s,
+        l: l
+    };
+}
+
+function hslToRgb(h, s, l) {
+    const hue = ((h % 360) + 360) % 360 / 360;
+
+    if (s === 0) {
+        const value = Math.round(l * 255);
+        return { r: value, g: value, b: value };
+    }
+
+    const hueToRgb = (p, q, t) => {
+        let channel = t;
+        if (channel < 0)
+            channel += 1;
+        if (channel > 1)
+            channel -= 1;
+        if (channel < 1 / 6)
+            return p + (q - p) * 6 * channel;
+        if (channel < 1 / 2)
+            return q;
+        if (channel < 2 / 3)
+            return p + (q - p) * (2 / 3 - channel) * 6;
+        return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+
+    return {
+        r: Math.round(hueToRgb(p, q, hue + 1 / 3) * 255),
+        g: Math.round(hueToRgb(p, q, hue) * 255),
+        b: Math.round(hueToRgb(p, q, hue - 1 / 3) * 255),
+    };
+}
+
+function isPixelColorful(r, g, b) {
+    const maxVal = Math.max(r, g, b);
+    const minVal = Math.min(r, g, b);
+    const chroma = maxVal - minVal;
+    const lightness = (maxVal + minVal) / 510;
+
+    if (chroma < 25)
+        return false;
+    if (chroma < 45 && lightness > 0.75)
+        return false;
+    return true;
+}
+
+function sampleChromaWeightedColor(pixbuf, bounds, centerCoords) {
+    const pixels = pixbuf.get_pixels();
+    const channels = pixbuf.get_n_channels();
+    const rowstride = pixbuf.get_rowstride();
+    const {
+        startX,
+        endX,
+        startY,
+        endY,
+    } = getPixbufSampleBounds(pixbuf, bounds);
+
+    const numBins = 18;
+    const hueBins = new Array(numBins).fill(0);
+    const sThreshold = 0.15;
+    let totalHueMass = 0;
+
+    const width = endX - startX;
+    const height = endY - startY;
+    const pixelCache = new Array(width * height);
+
+    for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+            const offset = y * rowstride + x * channels;
+            const r = pixels[offset];
+            const g = pixels[offset + 1];
+            const b = pixels[offset + 2];
+
+            const hsl = rgbToHsl(r, g, b);
+            const w = hsl.s * hsl.s;
+
+            const idx = (y - startY) * width + (x - startX);
+            pixelCache[idx] = { r, g, b, hsl, w };
+
+            if (hsl.s >= sThreshold) {
+                const binIndex = Math.floor(hsl.h / (360 / numBins)) % numBins;
+                hueBins[binIndex] += w;
+                totalHueMass += w;
+            }
+        }
+    }
+
+    // Count colorful pixels in the region
+    let colorfulCount = 0;
+    for (let i = 0; i < pixelCache.length; i++) {
+        const p = pixelCache[i];
+        p.isColorful = isPixelColorful(p.r, p.g, p.b);
+        if (p.isColorful) {
+            colorfulCount++;
+        }
+    }
+
+    // If actual colorful content exists, nerf whites/greys/neutrals in the region
+    const colorfulThreshold = Math.max(5, Math.round(pixelCache.length * 0.01));
+    const hasChroma = colorfulCount >= colorfulThreshold;
+    if (hasChroma) {
+        for (let i = 0; i < pixelCache.length; i++) {
+            const p = pixelCache[i];
+            if (!p.isColorful) {
+                p.w *= 0.01;
+            }
+        }
+    }
+
+    let isSingleHueDominant = true;
+    if (totalHueMass > 0) {
+        let maxWindowMass = 0;
+        for (let i = 0; i < numBins; i++) {
+            const windowMass = hueBins[(i - 1 + numBins) % numBins] +
+                hueBins[i] +
+                hueBins[(i + 1) % numBins];
+            if (windowMass > maxWindowMass) {
+                maxWindowMass = windowMass;
+            }
+        }
+        if (maxWindowMass / totalHueMass < 0.70) {
+            isSingleHueDominant = false;
+        }
+    }
+
+    let rSum = 0, gSum = 0, bSum = 0, wSum = 0;
+
+    if (isSingleHueDominant) {
+        for (let i = 0; i < pixelCache.length; i++) {
+            const p = pixelCache[i];
+            const weight = Math.max(0.00000001, p.w);
+            rSum += p.r * weight;
+            gSum += p.g * weight;
+            bSum += p.b * weight;
+            wSum += weight;
+        }
+    } else {
+        const widthPixbuf = pixbuf.get_width();
+        const heightPixbuf = pixbuf.get_height();
+        const centerPixelX = Math.max(0, Math.min(widthPixbuf - 1, Math.round(centerCoords.x * widthPixbuf)));
+        const centerPixelY = Math.max(0, Math.min(heightPixbuf - 1, Math.round(centerCoords.y * heightPixbuf)));
+
+        const radius = 5;
+        const startX_local = Math.max(startX, centerPixelX - radius);
+        const endX_local = Math.min(endX, centerPixelX + radius + 1);
+        const startY_local = Math.max(startY, centerPixelY - radius);
+        const endY_local = Math.min(endY, centerPixelY + radius + 1);
+
+        for (let y = startY_local; y < endY_local; y++) {
+            for (let x = startX_local; x < endX_local; x++) {
+                const idx = (y - startY) * width + (x - startX);
+                const p = pixelCache[idx];
+                const weight = Math.max(0.00000001, p.w);
+                rSum += p.r * weight;
+                gSum += p.g * weight;
+                bSum += p.b * weight;
+                wSum += weight;
+            }
+        }
+    }
+
+    if (wSum === 0) {
+        return { r: 40, g: 40, b: 40 };
+    }
+
+    return {
+        r: Math.round(rSum / wSum),
+        g: Math.round(gSum / wSum),
+        b: Math.round(bSum / wSum),
+    };
+}
 
 export function initCache() {
     if (_loadPromise)
@@ -25,7 +334,7 @@ export function initCache() {
                 const [success, contents] = file.load_contents_finish(res);
                 if (success) {
                     const data = JSON.parse(new TextDecoder().decode(contents));
-                    if (data && data.__version__ === 'v8') {
+                    if (data && data.__version__ === 'v6') {
                         for (const [k, v] of Object.entries(data)) {
                             if (k !== '__version__')
                                 _cache.set(k, v);
@@ -46,7 +355,7 @@ export function initCache() {
 
 function saveCache() {
     try {
-        const obj = { __version__: 'v8' };
+        const obj = { __version__: 'v6' };
         for (const [k, v] of _cache.entries())
             obj[k] = v;
         const data = JSON.stringify(obj);
@@ -71,6 +380,14 @@ function saveCache() {
     }
 }
 
+function blendOverOpaque(base, overlay, alpha) {
+    return {
+        r: Math.round(base.r * (1 - alpha) + overlay.r * alpha),
+        g: Math.round(base.g * (1 - alpha) + overlay.g * alpha),
+        b: Math.round(base.b * (1 - alpha) + overlay.b * alpha),
+    };
+}
+
 function parseHexColor(hex) {
     if (!hex)
         return { r: 0, g: 0, b: 0 };
@@ -89,6 +406,25 @@ function parseHexColor(hex) {
         };
     }
     return { r: 0, g: 0, b: 0 };
+}
+
+function getRelativeLuminance(color) {
+    const channelLum = (val) => {
+        const s = val / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channelLum(color.r) +
+        0.7152 * channelLum(color.g) +
+        0.0722 * channelLum(color.b);
+}
+
+// WCAG relative luminance is gamma-linear, not perceptually linear (mid-gray sits
+// at ~0.18-0.22 relative luminance, not 0.5). Convert to CIE L* so the adaptive
+// alpha responds to how bright the sample actually LOOKS, not the raw light value.
+function getPerceptualLightness(luminance) {
+    return luminance <= 0.008856
+        ? luminance * 9.033
+        : Math.pow(luminance, 1 / 3) * 1.16 - 0.16; // 0.0-1.0 scale (CIE L* / 100)
 }
 
 function getApcaContrast(txtR, txtG, txtB, bgR, bgG, bgB) {
@@ -132,74 +468,175 @@ function resolveSlideshowXml(xmlPath) {
                 }
 
                 const xmlStr = new TextDecoder('utf-8').decode(content);
-
-                // 1. Parse starttime
-                const starttimeMatch = xmlStr.match(/<starttime>([\s\S]*?)<\/starttime>/);
-                let startYear = 2020, startMonth = 0, startDay = 1, startHour = 0, startMin = 0, startSec = 0;
-                if (starttimeMatch) {
-                    const inner = starttimeMatch[1];
-                    const yearM = inner.match(/<year>(\d+)<\/year>/);
-                    const monthM = inner.match(/<month>(\d+)<\/month>/);
-                    const dayM = inner.match(/<day>(\d+)<\/day>/);
-                    const hourM = inner.match(/<hour>(\d+)<\/hour>/);
-                    const minM = inner.match(/<minute>(\d+)<\/minute>/);
-                    const secM = inner.match(/<second>(\d+)<\/second>/);
-                    if (yearM) startYear = parseInt(yearM[1], 10);
-                    if (monthM) startMonth = parseInt(monthM[1], 10) - 1;
-                    if (dayM) startDay = parseInt(dayM[1], 10);
-                    if (hourM) startHour = parseInt(hourM[1], 10);
-                    if (minM) startMin = parseInt(minM[1], 10);
-                    if (secM) startSec = parseInt(secM[1], 10);
-                }
-                const startDate = new Date(startYear, startMonth, startDay, startHour, startMin, startSec);
-
-                // 2. Parse static and transition blocks in order
-                const blockRegex = /<(static|transition)[^>]*>([\s\S]*?)<\/\1>/g;
-                const blocks = [];
-                let totalDuration = 0;
-                let match;
-                while ((match = blockRegex.exec(xmlStr)) !== null) {
-                    const type = match[1];
-                    const inner = match[2];
-                    const durM = inner.match(/<duration>([\d.]+)<\/duration>/);
-                    const duration = durM ? parseFloat(durM[1]) : 0;
-
-                    let fileStr = '';
-                    if (type === 'static') {
-                        const fileM = inner.match(/<file>([\s\S]*?)<\/file>/);
-                        fileStr = fileM ? fileM[1].trim() : '';
-                    } else {
-                        const fromM = inner.match(/<from>([\s\S]*?)<\/from>/);
-                        fileStr = fromM ? fromM[1].trim() : '';
-                    }
-
-                    blocks.push({ type, duration, file: fileStr });
-                    totalDuration += duration;
-                }
-
-                if (totalDuration > 0 && blocks.length > 0) {
-                    const now = new Date();
-                    let diffSeconds = (now.getTime() - startDate.getTime()) / 1000.0;
-                    let offset = diffSeconds % totalDuration;
-                    if (offset < 0)
-                        offset += totalDuration;
-
-                    for (const block of blocks) {
-                        if (offset <= block.duration) {
-                            resolve(block.file);
-                            return;
-                        }
-                        offset -= block.duration;
-                    }
-                    resolve(blocks[0].file);
-                    return;
-                }
+                const resolved = resolveSlideshowXmlContent(xmlStr);
+                resolve(resolved);
+                return;
             } catch (e) {
                 console.error(`[WACK/AlphaManager] Failed to resolve XML slideshow: ${e}`);
             }
             resolve(null);
         });
     });
+}
+
+async function resolveWallpaperSource(uri) {
+    let targetUri = uri;
+    let targetFilePath = null;
+
+    if (uri) {
+        let filePath = null;
+        if (uri.startsWith('file://')) {
+            filePath = Gio.File.new_for_uri(uri).get_path();
+        } else if (uri.startsWith('/')) {
+            filePath = uri;
+            // Normalize targetUri to be a file:// URI for caching consistency
+            try {
+                targetUri = GLib.filename_to_uri(uri, null);
+            } catch (e) {
+                targetUri = `file://${uri}`;
+            }
+        }
+
+        if (filePath) {
+            if (filePath.endsWith('.xml')) {
+                const resolvedPath = await resolveSlideshowXml(filePath);
+                if (resolvedPath) {
+                    targetFilePath = resolvedPath;
+                    targetUri = GLib.filename_to_uri(resolvedPath, null);
+                }
+            } else {
+                targetFilePath = filePath;
+            }
+        }
+    }
+
+    return { targetUri, targetFilePath };
+}
+
+async function getFileMtimeAndSize(filePath) {
+    if (!filePath)
+        return { mtime: 0, size: 0 };
+    const file = Gio.File.new_for_path(filePath);
+    return new Promise((resolve) => {
+        file.query_info_async(
+            'time::modified,standard::size',
+            Gio.FileQueryInfoFlags.NONE,
+            GLib.PRIORITY_DEFAULT,
+            null,
+            (fileObj, res) => {
+                try {
+                    const info = file.query_info_finish(res);
+                    const mtime = info.get_attribute_uint64('time::modified');
+                    const size = info.get_attribute_uint64('standard::size');
+                    resolve({ mtime, size });
+                } catch (e) {
+                    resolve({ mtime: 0, size: 0 });
+                }
+            }
+        );
+    });
+}
+
+async function loadScaledWallpaperPixbuf(targetFilePath, width, height, preserveAspectRatio = false) {
+    const file = Gio.File.new_for_path(targetFilePath);
+    return await new Promise((resolve, reject) => {
+        file.read_async(GLib.PRIORITY_DEFAULT, null, (fileObj, readRes) => {
+            try {
+                const stream = file.read_finish(readRes);
+                GdkPixbuf.Pixbuf.new_from_stream_at_scale_async(
+                    stream,
+                    width,
+                    height,
+                    preserveAspectRatio,
+                    null,
+                    (streamObj, pixRes) => {
+                        try {
+                            const pb = GdkPixbuf.Pixbuf.new_from_stream_finish(pixRes);
+                            stream.close(null);
+                            resolve(pb);
+                        } catch (e) {
+                            stream.close(null);
+                            reject(e);
+                        }
+                    }
+                );
+            } catch (e) {
+                reject(e);
+            }
+        });
+    });
+}
+
+function getPixbufSampleBounds(pixbuf, bounds) {
+    const width = pixbuf.get_width();
+    const height = pixbuf.get_height();
+
+    return {
+        startX: Math.max(0, Math.min(width, Math.floor(bounds.x1 * width))),
+        endX: Math.max(1, Math.min(width, Math.ceil(bounds.x2 * width))),
+        startY: Math.max(0, Math.min(height, Math.floor(bounds.y1 * height))),
+        endY: Math.max(1, Math.min(height, Math.ceil(bounds.y2 * height))),
+    };
+}
+
+function samplePixbufDominantColor(pixbuf, bounds) {
+    const pixels = pixbuf.get_pixels();
+    const channels = pixbuf.get_n_channels();
+    const rowstride = pixbuf.get_rowstride();
+    const {
+        startX,
+        endX,
+        startY,
+        endY,
+    } = getPixbufSampleBounds(pixbuf, bounds);
+
+    const bucketSize = 32;
+    const buckets = new Map();
+
+    for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+            const offset = y * rowstride + x * channels;
+            const r = pixels[offset];
+            const g = pixels[offset + 1];
+            const b = pixels[offset + 2];
+
+            const qR = Math.floor(r / bucketSize);
+            const qG = Math.floor(g / bucketSize);
+            const qB = Math.floor(b / bucketSize);
+            const key = `${qR},${qG},${qB}`;
+
+            let bucket = buckets.get(key);
+            if (!bucket) {
+                bucket = {
+                    count: 0,
+                    rSum: 0,
+                    gSum: 0,
+                    bSum: 0,
+                };
+                buckets.set(key, bucket);
+            }
+
+            bucket.count++;
+            bucket.rSum += r;
+            bucket.gSum += g;
+            bucket.bSum += b;
+        }
+    }
+
+    if (buckets.size === 0)
+        return { r: 40, g: 40, b: 40 };
+
+    let dominantBucket = null;
+    for (const bucket of buckets.values()) {
+        if (!dominantBucket || bucket.count > dominantBucket.count)
+            dominantBucket = bucket;
+    }
+
+    return {
+        r: Math.round(dominantBucket.rSum / dominantBucket.count),
+        g: Math.round(dominantBucket.gSum / dominantBucket.count),
+        b: Math.round(dominantBucket.bSum / dominantBucket.count),
+    };
 }
 
 /**
@@ -227,22 +664,10 @@ export async function getWallpaperAlpha(params) {
 
     await initCache();
 
-    let targetUri = uri;
-    let targetFilePath = null;
-    if (uri && uri.startsWith('file://')) {
-        const filePath = Gio.File.new_for_uri(uri).get_path();
-        if (filePath && filePath.endsWith('.xml')) {
-            const resolvedPath = await resolveSlideshowXml(filePath);
-            if (resolvedPath) {
-                targetFilePath = resolvedPath;
-                targetUri = GLib.filename_to_uri(resolvedPath, null);
-            }
-        } else {
-            targetFilePath = filePath;
-        }
-    }
+    const { targetUri, targetFilePath } = await resolveWallpaperSource(uri);
+    const { mtime, size } = await getFileMtimeAndSize(targetFilePath);
 
-    const cacheKey = `${targetUri}_${isColor}_${primaryColor}_${secondaryColor}_${shadingType}_${textLuminance}`;
+    const cacheKey = `${targetUri}_${mtime}_${size}_${isColor}_${primaryColor}_${secondaryColor}_${shadingType}_${textLuminance}`;
     if (_cache.has(cacheKey))
         return _cache.get(cacheKey);
 
@@ -269,48 +694,47 @@ export async function getWallpaperAlpha(params) {
         }
     } else if (targetFilePath) {
         try {
-            const file = Gio.File.new_for_path(targetFilePath);
-            const pixbuf = await new Promise((resolve, reject) => {
-                file.read_async(GLib.PRIORITY_DEFAULT, null, (fileObj, readRes) => {
-                    try {
-                        const stream = file.read_finish(readRes);
-                        GdkPixbuf.Pixbuf.new_from_stream_at_scale_async(
-                            stream,
-                            160,
-                            100,
-                            false,
-                            null,
-                            (streamObj, pixRes) => {
-                                try {
-                                    const pb = GdkPixbuf.Pixbuf.new_from_stream_finish(pixRes);
-                                    stream.close(null); // Clean up stream
-                                    resolve(pb);
-                                } catch (e) {
-                                    stream.close(null);
-                                    reject(e);
-                                }
-                            }
-                        );
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            });
+            const pixbuf = await loadScaledWallpaperPixbuf(targetFilePath, 256, 256, true);
 
+            const pbWidth = pixbuf.get_width();
+            const pbHeight = pixbuf.get_height();
             const pixels = pixbuf.get_pixels();
             const channels = pixbuf.get_n_channels();
             const rowstride = pixbuf.get_rowstride();
+
+            const bgSettings = getBgSettings();
+            const pictureOptions = bgSettings ? bgSettings.get_string('picture-options') : 'zoom';
+
+            const monitor = Main.layoutManager?.primaryMonitor || { width: 1920, height: 1080 };
+            const monitorWidth = monitor.width;
+            const monitorHeight = monitor.height;
+            const monitorAspect = monitorWidth / monitorHeight;
+            const pbAspect = pbWidth / pbHeight;
+
+            let visibleX = 0, visibleY = 0, visibleW = pbWidth, visibleH = pbHeight;
+
+            if (pictureOptions === 'zoom' || pictureOptions === 'spanned') {
+                if (pbAspect > monitorAspect) {
+                    visibleW = pbHeight * monitorAspect;
+                    visibleX = (pbWidth - visibleW) / 2;
+                } else if (pbAspect < monitorAspect) {
+                    visibleH = pbWidth / monitorAspect;
+                    visibleY = (pbHeight - visibleH) / 2;
+                }
+            }
+
+            const xStart = Math.max(0, Math.min(pbWidth - 1, Math.round(visibleX + visibleW * 0.25)));
+            const xEnd = Math.max(1, Math.min(pbWidth, Math.round(visibleX + visibleW * 0.75)));
+            const yStart = Math.max(0, Math.min(pbHeight - 1, Math.round(visibleY + visibleH * 0.05)));
+            const yEnd = Math.max(1, Math.min(pbHeight, Math.round(visibleY + visibleH * 0.35)));
 
             let rSum = 0, gSum = 0, bSum = 0;
             let diffSum = 0;
             let count = 0;
             let diffCount = 0;
 
-            // Clock bounding box on a 160x100 grid:
-            // X: 40 to 120 (middle 50%)
-            // Y: 5 to 35 (upper portion)
-            for (let y = 5; y < 35; y++) {
-                for (let x = 40; x < 120; x++) {
+            for (let y = yStart; y < yEnd; y++) {
+                for (let x = xStart; x < xEnd; x++) {
                     const offset = y * rowstride + x * channels;
                     const r = pixels[offset];
                     const g = pixels[offset + 1];
@@ -323,7 +747,7 @@ export async function getWallpaperAlpha(params) {
 
                     // Calculate high-frequency texture noise (differences between adjacent pixels)
                     // within the bounding box to avoid scaling on smooth vector/gradient edges.
-                    if (x < 119 && y < 34) {
+                    if (x < xEnd - 1 && y < yEnd - 1) {
                         const offsetRight = y * rowstride + (x + 1) * channels;
                         const offsetDown = (y + 1) * rowstride + x * channels;
 
@@ -392,8 +816,245 @@ export async function getWallpaperAlpha(params) {
     return alpha;
 }
 
+// Tuning range for the adaptive prompt-chip white-blend alpha.
+// Calibrated against the real macOS Sonoma lockscreen:
+//   At FLOOR (0.12): chip is 12% white on very dark wallpapers — keeps the chip dark.
+//   At ROOF  (0.70): chip is 70% white on bright wallpapers — keeps the chip frosted-white.
+const PROMPT_ALPHA_FLOOR = 0.16;
+const PROMPT_ALPHA_ROOF = 0.224;
+
+// Bright colorful samples should become a darker version of themselves, rather
+// than getting muddied by blending toward black. This tunes the target lightness
+// for that hue-preserving darken step.
+const PROMPT_BRIGHT_HUE_LIGHTNESS_FACTOR = 0.925;
+const PROMPT_BRIGHT_HUE_MIN_CHROMA = 0.08;
+const PROMPT_BRIGHT_HUE_LIGHTNESS_THRESHOLD = 0.8075;
+const PROMPT_INVERSE_ALPHA_CEILING = 0.125;
+
+// Tuning range for the dynamic password prompt box-shadow alpha.
+//   At FLOOR (0.04): subtle shadow on very dark wallpapers.
+//   At ROOF  (0.175): maximum shadow depth on bright wallpapers (like pink clouds).
+const PROMPT_SHADOW_FLOOR = 0.0175;
+const PROMPT_SHADOW_ROOF = 0.1175;
+
+/**
+ * Computes the adaptive white-blend alpha for the Cupertino prompt chip based on
+ * the sampled backdrop color's perceptual lightness and saturation.
+ *
+ * Darker wallpapers -> lower alpha (less white blend) -> prompt chip stays dark.
+ * Brighter wallpapers -> higher alpha (more white blend) -> prompt chip stays light.
+ * Saturated wallpapers -> vibrancy boost (more white blend) to avoid excessive coloring.
+ *
+ * @param {{r: number, g: number, b: number}} sampled
+ * @returns {number} alpha between PROMPT_ALPHA_FLOOR and PROMPT_ALPHA_ROOF
+ */
+function getPromptBlendAlpha(sampled) {
+    const luminance = Math.max(0, Math.min(1, getRelativeLuminance(sampled)));
+    const perceptualL = getPerceptualLightness(luminance);
+
+    // Darker samples (perceptualL near 0) -> alpha near FLOOR (less white, darker chip).
+    // Brighter samples (perceptualL near 1) -> alpha near ROOF (more white, lighter chip).
+    let alpha = PROMPT_ALPHA_FLOOR + (PROMPT_ALPHA_ROOF - PROMPT_ALPHA_FLOOR) * perceptualL;
+
+    // Vibrancy boost: colours that are simultaneously saturated AND mid-to-bright
+    // (the "neon green / lime / vivid yellow" band) get pushed back toward the roof.
+    // chromaLuminanceProduct peaks for saturated bright hues (greens, cyans, yellows)
+    // and is near-zero for dark colours or unsaturated pastels/greys.
+    // The 0.75 cap prevents pure-white-like edge cases from over-boosting.
+    const maxVal = Math.max(sampled.r, sampled.g, sampled.b);
+    const minVal = Math.min(sampled.r, sampled.g, sampled.b);
+    const chroma = (maxVal - minVal) / 255.0;
+    const vibrancyProduct = Math.min(0.75, chroma * perceptualL);
+    alpha = alpha + (PROMPT_ALPHA_ROOF - alpha) * vibrancyProduct;
+
+    return Math.max(PROMPT_ALPHA_FLOOR, Math.min(PROMPT_ALPHA_ROOF, alpha));
+}
+
+function getPromptDarkenedHueColor(sampled) {
+    const hsl = rgbToHsl(sampled.r, sampled.g, sampled.b);
+    return hslToRgb(
+        hsl.h,
+        hsl.s,
+        Math.max(0, Math.min(1, hsl.l * PROMPT_BRIGHT_HUE_LIGHTNESS_FACTOR))
+    );
+}
+
+function getPromptInvertedNeutralColor(sampled, perceptualL) {
+    const baseAlpha = getPromptBlendAlpha(sampled);
+    const t = Math.max(0, Math.min(
+        1,
+        (perceptualL - PROMPT_BRIGHT_HUE_LIGHTNESS_THRESHOLD) /
+            (1 - PROMPT_BRIGHT_HUE_LIGHTNESS_THRESHOLD)
+    ));
+    const alpha = baseAlpha + (PROMPT_INVERSE_ALPHA_CEILING - baseAlpha) * t;
+
+    return blendOverOpaque(sampled, { r: 0, g: 0, b: 0 }, alpha);
+}
+
+/**
+ * Samples the wallpaper behind the Cupertino password prompt and resolves an
+ * opaque chip color. Most backdrops get a frosted white blend; bright colorful
+ * backdrops become a darker version of their sampled hue, while bright neutral
+ * or all-white backdrops fall back to the older inverted alpha-blend logic.
+ *
+ * @param {Object} params
+ * @param {string} params.uri - Wallpaper picture URI
+ * @param {boolean} params.isColor - True if the background option is color/none
+ * @param {string} params.primaryColor - Hex value for primary color
+ * @param {string} params.secondaryColor - Hex value for secondary color
+ * @param {number} params.shadingType - Shading type (0=Solid, 1=Vertical, 2=Horizontal)
+ * @returns {Promise<{r: number, g: number, b: number}>}
+ */
+export async function getWallpaperPromptColor(params) {
+    const {
+        uri,
+        isColor,
+        primaryColor,
+        secondaryColor,
+        shadingType,
+        wellH = 0,
+        yCenterFraction = null,
+    } = params;
+
+    await initCache();
+
+    const { targetUri, targetFilePath } = await resolveWallpaperSource(uri);
+    const bgSettings = getBgSettings();
+    const pictureOptions = bgSettings ? bgSettings.get_string('picture-options') : 'zoom';
+
+    const monitor = Main.layoutManager?.primaryMonitor;
+    const monitorWidth = monitor ? monitor.width : 1920;
+    const monitorHeight = monitor ? monitor.height : 1080;
+
+    const { mtime, size } = await getFileMtimeAndSize(targetFilePath);
+
+    const cacheKey = `prompt_${targetUri}_${mtime}_${size}_${isColor}_${primaryColor}_${secondaryColor}_${shadingType}_${pictureOptions}_${monitorWidth}x${monitorHeight}_${wellH}_${yCenterFraction ? yCenterFraction.toFixed(4) : 'null'}`;
+    if (_cache.has(cacheKey)) {
+        console.debug(`[WACK/AlphaManager] cache HIT for key: ${cacheKey}`);
+        return _cache.get(cacheKey);
+    }
+
+    let sampled = { r: 40, g: 40, b: 40 };
+
+    const yCenter = (yCenterFraction !== undefined && yCenterFraction !== null)
+        ? yCenterFraction
+        : (CUPERTINO_PROMPT_VERTICAL_FRACTION - 0.3 * (wellH / monitorHeight));
+
+    if (isColor) {
+        const c1 = parseHexColor(primaryColor);
+        const c2 = parseHexColor(secondaryColor);
+
+        if (shadingType === 0) {
+            sampled = c1;
+        } else if (shadingType === 1) {
+            // The Cupertino password field sits in the lower third, so bias the
+            // vertical gradient sample toward that lower-centered band.
+            const t = Math.max(0.0, Math.min(1.0, yCenter));
+            sampled = {
+                r: Math.round(c1.r + (c2.r - c1.r) * t),
+                g: Math.round(c1.g + (c2.g - c1.g) * t),
+                b: Math.round(c1.b + (c2.b - c1.b) * t),
+            };
+        } else {
+            sampled = {
+                r: Math.round((c1.r + c2.r) / 2),
+                g: Math.round((c1.g + c2.g) / 2),
+                b: Math.round((c1.b + c2.b) / 2),
+            };
+        }
+    } else if (targetFilePath) {
+        try {
+            const pixbuf = await loadScaledWallpaperPixbuf(targetFilePath, 256, 256, true);
+
+            const pbWidth = pixbuf.get_width();
+            const pbHeight = pixbuf.get_height();
+
+            const monitorAspect = monitorWidth / monitorHeight;
+            const pbAspect = pbWidth / pbHeight;
+
+            let visibleX = 0, visibleY = 0, visibleW = pbWidth, visibleH = pbHeight;
+
+            if (pictureOptions === 'zoom' || pictureOptions === 'spanned') {
+                if (pbAspect > monitorAspect) {
+                    visibleW = pbHeight * monitorAspect;
+                    visibleX = (pbWidth - visibleW) / 2;
+                } else if (pbAspect < monitorAspect) {
+                    visibleH = pbWidth / monitorAspect;
+                    visibleY = (pbHeight - visibleH) / 2;
+                }
+            }
+
+            const y1 = yCenter - 20 / monitorHeight;
+            const y2 = yCenter + 20 / monitorHeight;
+
+            const xStart = Math.max(0, Math.min(pbWidth - 1, Math.round(visibleX + visibleW * 0.40)));
+            const xEnd = Math.max(1, Math.min(pbWidth, Math.round(visibleX + visibleW * 0.60)));
+            const yStart = Math.max(0, Math.min(pbHeight - 1, Math.round(visibleY + visibleH * y1)));
+            const yEnd = Math.max(1, Math.min(pbHeight, Math.round(visibleY + visibleH * y2)));
+
+            const mappedBounds = {
+                x1: xStart / pbWidth,
+                x2: xEnd / pbWidth,
+                y1: yStart / pbHeight,
+                y2: yEnd / pbHeight
+            };
+
+            const centerCoords = {
+                x: ((xStart + xEnd) / 2) / pbWidth,
+                y: ((yStart + yEnd) / 2) / pbHeight
+            };
+
+            // Sample using chroma-weighted, cluster-aware sampler
+            sampled = sampleChromaWeightedColor(pixbuf, mappedBounds, centerCoords);
+        } catch (e) {
+            console.error(`[WACK/AlphaManager] Failed to sample wallpaper for prompt color: ${e}`);
+        }
+    }
+
+    const luminance = Math.max(0, Math.min(1, getRelativeLuminance(sampled)));
+    const perceptualL = getPerceptualLightness(luminance);
+
+    const maxVal = Math.max(sampled.r, sampled.g, sampled.b);
+    const minVal = Math.min(sampled.r, sampled.g, sampled.b);
+    const chroma = (maxVal - minVal) / 255.0;
+    const isBrightSample = perceptualL > PROMPT_BRIGHT_HUE_LIGHTNESS_THRESHOLD;
+    const isBrightHue = isBrightSample && chroma >= PROMPT_BRIGHT_HUE_MIN_CHROMA;
+
+    const blended = isBrightHue
+        ? getPromptDarkenedHueColor(sampled)
+        : isBrightSample
+            ? getPromptInvertedNeutralColor(sampled, perceptualL)
+            : blendOverOpaque(
+            sampled,
+            { r: 255, g: 255, b: 255 },
+            getPromptBlendAlpha(sampled)
+        );
+
+    // Calculate a dynamic box-shadow alpha to help the entry chip stand out
+    // against light details/clouds in the wallpaper.
+    let shadowAlpha = PROMPT_SHADOW_FLOOR + (PROMPT_SHADOW_ROOF - PROMPT_SHADOW_FLOOR) * perceptualL;
+
+    // Dark chips already separate well; avoid piling a dirty shadow on top.
+    if (isBrightSample) {
+        shadowAlpha = PROMPT_SHADOW_FLOOR;
+    }
+
+    const result = {
+        r: blended.r,
+        g: blended.g,
+        b: blended.b,
+        shadowAlpha: shadowAlpha
+    };
+
+    console.debug(`[WACK/AlphaManager] cache MISS for key: ${cacheKey}, computed: ${JSON.stringify(result)}`);
+    _cache.set(cacheKey, result);
+    saveCache();
+    return result;
+}
+
 export function clearCache() {
     _cache.clear();
     _loaded = false;
     _loadPromise = null;
+    _bgSettings = null;
 }

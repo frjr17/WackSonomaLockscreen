@@ -122,6 +122,21 @@ msgstr "クラシック"
 msgid "Lockscreen Mode"
 msgstr "ロック画面モード"
 
+msgid "Show message when locked"
+msgstr "ロック時にメッセージを表示"
+
+msgid "Set..."
+msgstr "設定..."
+
+msgid "Set a message to appear on the lockscreen"
+msgstr "ロック画面に表示するメッセージを設定"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "OK"
+msgstr "OK"
+
 msgid "Mode"
 msgstr "モード"
 
@@ -167,9 +182,129 @@ msgstr "デフォルトに戻す"
 msgid "Saweria"
 msgstr "サウェリア"
 
+msgid "Show a custom message above the user prompt stack."
+msgstr "ユーザー入力欄の上部にカスタムメッセージを表示します。"
+
 msgid "Screen Timeout"
 msgstr "画面のタイムアウト"
 
 msgid "Time to wait before turning off the screen"
 msgstr "画面をオフにするまでの待ち時間"
+
+msgid "Extras"
+msgstr "追加機能"
+
+msgid "[PRO] GDM Expansion"
+msgstr "[PRO] GDM 扩展"
+
+msgid "Enabled. Custom layout is active on GDM."
+msgstr "有効。カスタムレイアウトが GDM で有効です。"
+
+msgid "Enabled"
+msgstr "有効"
+
+msgid "Disabled"
+msgstr "無効"
+
+msgid "Disabled."
+msgstr "無効。"
+
+msgid "GDM and Cross Session Module are missing."
+msgstr "GDM および Cross Session モジュールがありません。"
+
+msgid "GDM dconf override configuration is missing."
+msgstr "GDM dconf オーバーライド設定がありません。"
+
+msgid "GDM integration is not configured."
+msgstr "GDM 統合は設定されていません。"
+
+msgid "Upgrade to Pro"
+msgstr "Pro にアップグレード"
+
+msgid "Get a Sonoma-inspired GDM login screen layout and automatically synchronize your wallpapers from the active user session. To upgrade, run copied command in a terminal."
+msgstr "Sonoma 風の GDM ログイン画面レイアウトを取得し、アクティブなユーザーセッションから壁紙を自动的に同期します。アップグレードするには、コピーしたコマンドをターミナルで実行してください。"
+
+msgid "Copy upgrade command to clipboard"
+msgstr "アップグレードコマンドをクリップボードにコピー"
+
+msgid "Copied upgrade command to clipboard!"
+msgstr "アップグレードコマンドをクリップボードにコピーしました！"
+
+msgid "Uninstall GDM Expansion"
+msgstr "GDM 拡張をアンインストール"
+
+msgid "Revert GDM login screen layout to GNOME Default. To uninstall, run copied command in a terminal."
+msgstr "GDM ログイン画面のレイアウトを GNOME のデフォルトに戻します。アンインストールするには、コピーしたコマンドをターミナルで実行してください。"
+
+msgid "Copy uninstall command to clipboard"
+msgstr "アンインストールコマンドをクリップボードにコピー"
+
+msgid "Copied uninstall command to clipboard!"
+msgstr "アンインストールコマンドをクリップボードにコピーしました！"
+
+msgid "[BETA] WACK Shell Integration"
+msgstr "[BETA] WACK Shell 統合"
+
+msgid "Installed. Enables crossfade transitions and Cupertino-inspired shell customisations."
+msgstr "インストール済み。クロスフェード遷移とクパチーノ風のシェルカスタマイズを有効にします。"
+
+msgid "Upgrade to [PRO]"
+msgstr "[PRO] にアップグレード"
+
+msgid "Installed"
+msgstr "インストール済"
+
+msgid "Not installed. Install WACK Shell to unlock transition effects."
+msgstr "未インストール。移行エフェクトを利用するには WACK Shell をインストールしてください。"
+
+msgid "Not Installed"
+msgstr "未インストール"
+
+msgid "Install WACK Shell"
+msgstr "WACK Shell をインストール"
+
+msgid "Get advanced desktop crossfade transitions and Cupertino-inspired shell customisations. May contain bugs, report if found."
+msgstr "高度なデスクトップのクロスフェード遷移とクパチーノ風のシェルカスタマイズを取得します。バグが含まれる場合がありますので、見つかった場合は報告してください。"
+
+msgid "Copy install command to clipboard"
+msgstr "インストールコマンドをクリップボードにコピー"
+
+msgid "Copied WACK Shell install command to clipboard!"
+msgstr "WACK Shell インストールコマンドをクリップボードにコピーしました！"
+
+msgid "Open WACK Shell repository"
+msgstr "WACK Shell リポジトリを開く"
+
+msgid "Check for Updates"
+msgstr "更新を確認"
+
+msgid "Copy check command to verify if a newer version of WACK Shell is available."
+msgstr "WACK Shell の新しいバージョンが利用可能かどうかを確認するチェックコマンドをコピーします。"
+
+msgid "Copy update-check command to clipboard"
+msgstr "更新確認コマンドをクリップボードにコピー"
+
+msgid "Copied WACK Shell update-check command to clipboard!"
+msgstr "WACK Shell の更新確認コマンドをクリップボードにコピーしました！"
+
+msgid "Extras - Status"
+msgstr "追加機能 - ステータス"
+
+msgid "Extras - Actions"
+msgstr "追加機能 - アクション"
+
+msgid "GDM Expansion - Remove"
+msgstr "GDM 拡張 - アンインストール"
+
+msgid "WACK Shell - Check for Updates"
+msgstr "WACK Shell - 更新を確認"
+
+msgid "WACK Shell - Install"
+msgstr "WACK Shell - インストール"
+
+msgid "Upcoming Features"
+msgstr "今後の機能"
+
+msgid "Check PRO features of this extension on this extension's GitHub repo."
+msgstr "この拡張機能のGitHubリポジトリでPRO機能を確認してください。"
 

@@ -122,6 +122,21 @@ msgstr "Klasik"
 msgid "Lockscreen Mode"
 msgstr "Mode Layar Kunci"
 
+msgid "Show message when locked"
+msgstr "Tampilkan pesan saat terkunci"
+
+msgid "Set..."
+msgstr "Atur..."
+
+msgid "Set a message to appear on the lockscreen"
+msgstr "Atur pesan untuk ditampilkan di layar kunci"
+
+msgid "Cancel"
+msgstr "Batal"
+
+msgid "OK"
+msgstr "OK"
+
 msgid "Mode"
 msgstr "Mode"
 
@@ -167,9 +182,129 @@ msgstr "Kembalikan default"
 msgid "Saweria"
 msgstr "Saweria"
 
+msgid "Show a custom message above the user prompt stack."
+msgstr "Tampilkan pesan khusus di atas kolom input pengguna."
+
 msgid "Screen Timeout"
 msgstr "Batas Waktu Layar"
 
 msgid "Time to wait before turning off the screen"
 msgstr "Lama waktu sebelum layar mati"
+
+msgid "Extras"
+msgstr "Tambahan"
+
+msgid "[PRO] GDM Expansion"
+msgstr "[PRO] Ekspansi GDM"
+
+msgid "Enabled. Custom layout is active on GDM."
+msgstr "Aktif. Tata letak khusus aktif di GDM."
+
+msgid "Enabled"
+msgstr "Aktif"
+
+msgid "Disabled"
+msgstr "Nonaktif"
+
+msgid "Disabled."
+msgstr "Nonaktif."
+
+msgid "GDM and Cross Session Module are missing."
+msgstr "Modul GDM dan Cross Session hilang."
+
+msgid "GDM dconf override configuration is missing."
+msgstr "Konfigurasi override dconf GDM hilang."
+
+msgid "GDM integration is not configured."
+msgstr "Integrasi GDM tidak dikonfigurasi."
+
+msgid "Upgrade to Pro"
+msgstr "Tingkatkan ke Pro"
+
+msgid "Get a Sonoma-inspired GDM login screen layout and automatically synchronize your wallpapers from the active user session. To upgrade, run copied command in a terminal."
+msgstr "Dapatkan tata letak layar masuk GDM yang terinspirasi Sonoma dan sinkronkan wallpaper Anda secara otomatis dari sesi pengguna aktif. Untuk meningkatkan, jalankan perintah yang disalin di terminal."
+
+msgid "Copy upgrade command to clipboard"
+msgstr "Salin perintah peningkatan ke papan klip"
+
+msgid "Copied upgrade command to clipboard!"
+msgstr "Perintah peningkatan disalin ke papan klip!"
+
+msgid "Uninstall GDM Expansion"
+msgstr "Copot Pemasangan Ekspansi GDM"
+
+msgid "Revert GDM login screen layout to GNOME Default. To uninstall, run copied command in a terminal."
+msgstr "Kembalikan tata letak layar masuk GDM ke GNOME Default. Untuk mencopot pemasangan, jalankan perintah yang disalin di terminal."
+
+msgid "Copy uninstall command to clipboard"
+msgstr "Salin perintah copot pemasangan ke papan klip"
+
+msgid "Copied uninstall command to clipboard!"
+msgstr "Perintah copot pemasangan disalin ke papan klip!"
+
+msgid "[BETA] WACK Shell Integration"
+msgstr "[BETA] Integrasi WACK Shell"
+
+msgid "Installed. Enables crossfade transitions and Cupertino-inspired shell customisations."
+msgstr "Terpasang. Mengaktifkan transisi pudar silang dan kustomisasi shell yang terinspirasi Cupertino."
+
+msgid "Upgrade to [PRO]"
+msgstr "Tingkatkan ke [PRO]"
+
+msgid "Installed"
+msgstr "Terpasang"
+
+msgid "Not installed. Install WACK Shell to unlock transition effects."
+msgstr "Tidak terpasang. Instal WACK Shell untuk membuka efek transisi."
+
+msgid "Not Installed"
+msgstr "Tidak Terpasang"
+
+msgid "Install WACK Shell"
+msgstr "Instal WACK Shell"
+
+msgid "Get advanced desktop crossfade transitions and Cupertino-inspired shell customisations. May contain bugs, report if found."
+msgstr "Dapatkan transisi pudar silang desktop tingkat lanjut dan kustomisasi shell yang terinspirasi Cupertino. Mungkin mengandung bug, laporkan jika ditemukan."
+
+msgid "Copy install command to clipboard"
+msgstr "Salin perintah instalasi ke papan klip"
+
+msgid "Copied WACK Shell install command to clipboard!"
+msgstr "Perintah instalasi WACK Shell disalin ke papan klip!"
+
+msgid "Open WACK Shell repository"
+msgstr "Buka repositori WACK Shell"
+
+msgid "Check for Updates"
+msgstr "Periksa Pembaruan"
+
+msgid "Copy check command to verify if a newer version of WACK Shell is available."
+msgstr "Salin perintah pemeriksaan untuk memverifikasi apakah versi WACK Shell yang lebih baru tersedia."
+
+msgid "Copy update-check command to clipboard"
+msgstr "Salin perintah pemeriksaan pembaruan ke papan klip"
+
+msgid "Copied WACK Shell update-check command to clipboard!"
+msgstr "Perintah pemeriksaan pembaruan WACK Shell disalin ke papan klip!"
+
+msgid "Extras - Status"
+msgstr "Ekstra - Status"
+
+msgid "Extras - Actions"
+msgstr "Ekstra - Tindakan"
+
+msgid "GDM Expansion - Remove"
+msgstr "Ekspansi GDM - Hapus"
+
+msgid "WACK Shell - Check for Updates"
+msgstr "WACK Shell - Periksa Pembaruan"
+
+msgid "WACK Shell - Install"
+msgstr "WACK Shell - Instal"
+
+msgid "Upcoming Features"
+msgstr "Fitur Mendatang"
+
+msgid "Check PRO features of this extension on this extension's GitHub repo."
+msgstr "Periksa fitur PRO ekstensi ini di repositori GitHub-nya."
 
