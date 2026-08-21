@@ -87,6 +87,8 @@ const PowerProfilesIface = `<node>
 </interface>
 </node>`;
 
+const BACKGROUND_ACTOR_Y_OFFSET = 0.5;
+const BACKGROUND_ACTOR_Z_POSITION = 1;
 
 export default class WackLockscreenClockExtension extends Extension {
     // ── Single Source of Truth for Prompt State ───────────────────────────
@@ -193,10 +195,7 @@ export default class WackLockscreenClockExtension extends Extension {
         if (dialog._updateBackgroundEffects) {
             this._origUpdateBgEffects = dialog._updateBackgroundEffects.bind(dialog);
             dialog._updateBackgroundEffects = () => {
-                for (const widget of dialog._backgroundGroup) {
-                    const effect = widget.get_effect('blur');
-                    if (effect) effect.set({ brightness: 1.0, radius: 0 });
-                }
+                this._applyBackgroundBlur(dialog._adjustment?.value ?? 0);
             };
             dialog._updateBackgroundEffects();
         }
@@ -723,6 +722,93 @@ export default class WackLockscreenClockExtension extends Extension {
             mainBox.queue_relayout();
             this._mainBox = mainBox;
             this._updateLockscreenMessage();
+        }
+    }
+
+    _syncBackgroundActors() {
+        const backgroundGroup = this._dialog?._backgroundGroup;
+        if (!backgroundGroup)
+            return;
+
+        this._backgroundActorStates ??= new Map();
+        const activeActors = new Set(backgroundGroup.get_children());
+
+        // GNOME recreates these actors when the monitor layout changes. Drop
+        // stale entries so destroyed actors are not retained until disable().
+        for (const actor of this._backgroundActorStates.keys()) {
+            if (!activeActors.has(actor))
+                this._backgroundActorStates.delete(actor);
+        }
+
+        for (const actor of activeActors) {
+            let state = this._backgroundActorStates.get(actor);
+
+            if (!state) {
+                state = {
+                    y: actor.y,
+                    zPosition: actor.z_position,
+                };
+                this._backgroundActorStates.set(actor, state);
+            } else {
+                // Preserve legitimate geometry changes made by GNOME or another
+                // extension without treating our own half-pixel offset as new.
+                const patchedY = state.y + BACKGROUND_ACTOR_Y_OFFSET;
+                if (Math.abs(actor.y - patchedY) > 0.01)
+                    state.y = actor.y;
+                if (actor.z_position !== BACKGROUND_ACTOR_Z_POSITION)
+                    state.zPosition = actor.z_position;
+            }
+
+            // Shell.BlurEffect can render the primary lock-screen actor black in
+            // multi-monitor layouts when all backgrounds share the default Z.
+            // A non-zero Z avoids that path; the half-pixel offset prevents the
+            // one-pixel seam otherwise introduced by the workaround.
+            actor.set({
+                y: state.y + BACKGROUND_ACTOR_Y_OFFSET,
+                z_position: BACKGROUND_ACTOR_Z_POSITION,
+            });
+        }
+    }
+
+    _restoreBackgroundActors() {
+        if (!this._backgroundActorStates)
+            return;
+
+        for (const [actor, state] of this._backgroundActorStates) {
+            try {
+                if (actor.get_parent()) {
+                    actor.set({
+                        y: state.y,
+                        z_position: state.zPosition,
+                    });
+                }
+            } catch (e) {
+                // Actors destroyed during a monitor reconfiguration need no
+                // restoration; their replacements are tracked separately.
+            }
+        }
+
+        this._backgroundActorStates.clear();
+        this._backgroundActorStates = null;
+    }
+
+    _applyBackgroundBlur(progress) {
+        this._syncBackgroundActors();
+
+        const clampedProgress = Math.max(0, Math.min(1, progress));
+        const isCupertino = this._lockscreenMode === 'cupertino';
+        const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const radius = isCupertino
+            ? 0
+            : PROMPT_BLUR_RADIUS * scaleFactor * clampedProgress;
+        const brightness = isCupertino
+            ? 1.0
+            : 1.0 - (1.0 - PROMPT_BLUR_BRIGHTNESS) * clampedProgress;
+
+        for (const actor of this._dialog?._backgroundGroup ?? []) {
+            const effect = actor.get_effect('blur');
+            if (effect)
+                effect.set({ radius, brightness });
         }
     }
 
